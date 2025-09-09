@@ -1,0 +1,311 @@
+/* Dropdown de autocomplete para produtos */
+.autocomplete-dropdown {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #ccc;
+  z-index: 2000;
+  width: 220px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: 1em;
+  box-shadow: 0 2px 8px #0002;
+  border-radius: 6px;
+}
+
+.autocomplete-dropdown div {
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.autocomplete-dropdown div:hover {
+  background: #e3f2fd;
+}
+/* Centraliza e define tamanho da imagem de preview no dialog de edição */
+#edit-preview {
+  display: block;
+  margin: 0 auto 12px auto !important;
+  width: 100px !important;
+  height: 100px !important;
+  object-fit: cover !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 4px #0002 !important;
+}
+/* Centraliza os botões nos dialogs */
+.dialog-box .dialog-actions {
+  display: flex;
+  gap: 1em;
+  justify-content: center;
+}
+/* Botões de ação na lista de mercadorias */
+.mercadoria-actions button {
+  background: #f5faff;
+  border: 1px solid #b3d8f6;
+  color: #2196f3;
+  border-radius: 5px;
+  font-size: 15px;
+  padding: 6px 12px;
+  margin: 0;
+  box-shadow: 0 1px 2px #0001;
+  transition: background 0.2s, color 0.2s, border 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mercadoria-actions button:hover {
+  background: #e3f2fd;
+  color: #0d47a1;
+  border-color: #2196f3;
+}
+.mercadoria-actions .btn-deletar {
+  background: #fff5f5;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+.mercadoria-actions .btn-deletar:hover {
+  background: #ffebee;
+  color: #b71c1c;
+  border-color: #f44336;
+}
+
+/* Dialog customizado centralizado */
+.dialog-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.18);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dialog-box {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(33,150,243,0.10), 0 1.5px 6px #0001;
+  padding: 32px 28px 24px 28px;
+  min-width: 320px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+  animation: dialogIn 0.18s cubic-bezier(.4,0,.2,1);
+}
+@keyframes dialogIn {
+  from { transform: scale(0.95) translateY(-20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+.dialog-box h3 {
+  margin-bottom: 10px;
+  color: #2196f3;
+  font-size: 20px;
+}
+.dialog-box label {
+  font-size: 15px;
+  color: #333;
+  margin-bottom: 4px;
+}
+.dialog-box input[type="text"],
+.dialog-box input[type="number"],
+.dialog-box input[type="file"],
+#estoque-cor, #estoque-tamanho {
+  width: 100%;
+  margin-top: 2px;
+  margin-bottom: 5px;
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #b3d8f6;
+  font-size: 15px;
+}
+.dialog-box button {
+  padding: 8px 18px;
+  border-radius: 5px;
+  border: none;
+  background: #2196f3;
+  color: #fff;
+  font-weight: 500;
+  font-size: 15px;
+  margin-right: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dialog-box button.btn-cancelar-edit{
+  background: transparent !important;
+  border: 1px solid #2196f3;
+  color: #2196f3;
+}
+
+.remover-variante {
+  background: transparent !important;
+  color: #f44336;
+}
+
+#adicionar-variante {
+  background: transparent !important;
+  color: #2196f3;
+  border: 1px solid #b3d8f6;
+}
+
+.dialog-box button:hover {
+  background: #1976d2;
+}
+/* Reset básico */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Inter", sans-serif;
+}
+
+/* Layout principal */
+body {
+  display: flex;
+  height: 100vh;
+  color: #333;
+  background-color: #f9f9f9;
+}
+
+.container {
+  display: flex;
+  width: 100%;
+}
+
+/* Sidebar lateral */
+.sidebar {
+  width: 220px;
+  background-color: #ffffff;
+  border-right: 1px solid #ddd;
+  padding: 20px;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+}
+
+.sidebar h2 {
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: #2196f3;
+}
+
+.sidebar nav ul {
+  list-style: none;
+}
+
+.sidebar nav ul li {
+  margin: 10px 0;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.sidebar nav ul li:hover {
+  background-color: #e0f2ff;
+}
+
+/* Main content */
+.main {
+  flex-grow: 1;
+  padding: 30px;
+  overflow-y: auto;
+}
+
+h1 {
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+/* Formulários */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 400px;
+  margin-bottom: 30px;
+}
+
+form input, form select, form button {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
+form button {
+  background-color: #2196f3;
+  color: white;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+form button:hover {
+  background-color: #1976d2;
+}
+
+/* Abas */
+.aba {
+  display: none;
+}
+
+.aba.ativa {
+  display: block;
+}
+
+/* Lista de mercadorias e vendas */
+.item-mercadoria, .item-venda {
+  background-color: white;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  border-left: 4px solid #2196f3;
+}
+
+/* Dashboard de análise */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.card {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+}
+
+/* Gráficos */
+.graficos-analise {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+canvas {
+  background-color: white;
+  padding: 10px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.remover-item {
+  color: #f44336;
+  cursor: pointer;
+  background-color: transparent;
+}
+
+.remover-item:hover{
+  background-color: transparent;
+}
+
+.item-venda-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}

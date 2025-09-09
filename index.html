@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soulfit</title>
+    <link rel="stylesheet" href="./assets/style.css" />
+    <style>
+        #grafico-vendas {
+            width: 520px !important;
+            height: 420px !important;
+            max-width: 100vw;
+            max-height: 70vh;
+            box-sizing: border-box;
+        }
+
+        #grafico-pizza {
+            width: 520px !important;
+            height: 420px !important;
+            max-width: 100vw;
+            max-height: 90vh;
+            box-sizing: border-box;
+        }
+
+        #grafico-linha-vendas {
+            width: 500px !important;
+            height: 320px !important;
+            max-width: 100vw;
+            max-height: 70vh;
+            box-sizing: border-box;
+            justify-content: center;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Menu lateral -->
+        <aside class="sidebar">
+            <img src="./assets/soulfit.png" alt="SoulFit Logo"
+                style="display: block; margin: 1em auto 1em auto; height: 3em;" />
+            <nav>
+                <ul>
+                    <li onclick="abrirAba('mercadorias')">🗃️ Mercadorias</li>
+                    <li onclick="abrirAba('vendas')">💳 Vendas</li>
+                    <li onclick="abrirAba('historico')">📚 Histórico</li>
+                    <li onclick="abrirAba('graficos')">📊 Estatísticas</li>
+                    <li onclick="abrirAba('clientes')">👤 Clientes</li>
+                    <li onclick="abrirAba('mensagens')">💬 Disparo de Mensagens</li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Conteúdo principal -->
+        <main class="main">
+            <!-- Abas -->
+            <section id="mercadorias" class="aba ativa">
+                <h1>Cadastro de Mercadoria</h1>
+                <form id="form-mercadoria">
+                    <input type="text" id="codigo" placeholder="Código do Produto" required />
+                    <input type="text" id="nome" placeholder="Nome do Produto" required />
+                    <input type="number" id="preco" placeholder="Preço (R$)" step="0.01" required />
+                    <input type="file" id="imagem" accept="image/*" style="margin-bottom:10px;" />
+
+                    <div id="variantes-container">
+                        <label style="font-weight:bold;">Variantes:</label>
+                        <div class="variante-linha" style="display:flex; align-items:center; margin:8px 0; gap:8px;">
+                            <input type="text" class="cor-variante" placeholder="Cor" required style="width:90px;" />
+                            <span style="margin:0 8px 0 8px;">Qtd por tamanho:</span>
+                            <label>P <input type="number" class="qtd-tamanho" data-tamanho="P" min="0" value="0"
+                                    style="width:50px;" /></label>
+                            <label>M <input type="number" class="qtd-tamanho" data-tamanho="M" min="0" value="0"
+                                    style="width:50px;" /></label>
+                            <label>G <input type="number" class="qtd-tamanho" data-tamanho="G" min="0" value="0"
+                                    style="width:50px;" /></label>
+                            <label>GG <input type="number" class="qtd-tamanho" data-tamanho="GG" min="0" value="0"
+                                    style="width:50px;" /></label>
+                            <label>T.U. <input type="number" class="qtd-tamanho" data-tamanho="T.U." min="0" value="0"
+                                    style="width:50px;" /></label>
+                            <button type="button" class="remover-variante"
+                                style="margin-left:8px;display:none;">✖</button>
+                        </div>
+                    </div>
+                    <button type="button" id="adicionar-variante" class="btn secundario" style="margin:8px 0 12px 0;">+
+                        Adicionar Cor</button>
+                    <button type="submit">Salvar Mercadoria</button>
+                </form>
+                <input type="text" id="busca-mercadorias" placeholder="Pesquisar por código ou nome do produto"
+                    style="width:100%;max-width:400px;margin:16px 0 12px 0;padding:8px 12px;border-radius:6px;border:1px solid #b3d8f6;font-size:15px;">
+                <div id="lista-mercadorias"></div>
+            </section>
+
+            <section id="vendas" class="aba">
+                <h1>Registrar Venda</h1>
+
+                <form id="form-venda" class="form-venda-multipla">
+                    <div id="itens-venda" class="itens-venda-container">
+                        <div class="item-venda-linha">
+                            <input type="text" class="codigo-produto" placeholder="Código do Produto" required
+                                style="width:110px;" autocomplete="off" />
+                            <input type="text" class="nome-produto" placeholder="Nome do Produto" required
+                                style="width:160px; margin-left:6px;" autocomplete="off" />
+                            <select class="cor-variante-venda" required style="width:90px;">
+                                <option value="">Cor</option>
+                            </select>
+                            <select class="tamanho-variante-venda" required style="width:70px;">
+                                <option value="">Tam</option>
+                            </select>
+                            <input type="number" class="quantidade-produto" placeholder="Qtd" min="1" value="1" required
+                                style="width:60px;" />
+                            <button type="button" class="remover-item">✖</button>
+                        </div>
+                    </div>
+
+
+                    <button type="button" id="adicionar-item" class="btn secundario">+ Adicionar Produto</button>
+
+                    <div id="venda-total-container"
+                        style="margin: 16px 0 8px 0; font-size: 1.15em; color: #1976d2; font-weight: bold;">
+                        Valor Total: R$ <span id="venda-total">0,00</span>
+                    </div>
+
+
+                    <label for="metodo">Método de Pagamento:</label>
+                    <select id="metodo" required>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Cartão Crédito">Cartão (Crédito)</option>
+                        <option value="Cartão Débito">Cartão (Débito)</option>
+                        <option value="PIX">PIX</option>
+                    </select>
+                    <div id="parcelas-container" style="display:none; margin-top:8px;">
+                        <label for="parcelas">Número de Parcelas:</label>
+                        <input type="number" id="parcelas" min="1" max="12" value="1"
+                            style="width:80px; margin-left:8px;" />
+                    </div>
+
+                    <fieldset style="margin-top:1em;padding:1em 0.5em;border:1px solid #ccc;border-radius:8px;">
+                        <legend style="font-weight:bold; color:#444;">Dados do Cliente (opcional)</legend>
+                        <div style="display: flex; flex-direction: column; gap: 0.5em;">
+                            <input type="text" id="venda_cliente_nome" placeholder="Nome" autocomplete="off"
+                                data-autocomplete-client />
+                            <input type="text" id="venda_cliente_cpf" placeholder="CPF" data-mask-cpf />
+                            <input type="text" id="venda_cliente_telefone" placeholder="Telefone" data-mask-phone />
+                            <label for="venda_cliente_nascimento"
+                                style="font-weight:bold; color:#444; font-size: 13px; margin-left: 3px">Data de
+                                nascimento</label>
+                            <input type="date" id="venda_cliente_nascimento"
+                                onfocus="this.showPicker && this.showPicker()" />
+                        </div>
+                    </fieldset>
+                    <button type="submit" class="btn primario">Registrar Venda</button>
+                </form>
+            </section>
+
+
+            <section id="historico" class="aba">
+                <h1>Histórico de Vendas</h1>
+                <input type="text" id="busca-vendas" placeholder="Pesquisar por código, cliente ou data (dd/mm/aaaa)"
+                    style="width:100%;max-width:400px;margin-bottom:16px;padding:8px 12px;border-radius:6px;border:1px solid #b3d8f6;font-size:15px;">
+                <div id="lista-vendas"></div>
+            </section>
+
+            <section id="graficos" class="aba">
+
+                <h1>Estatísticas Mensais</h1>
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 18px;">
+                    <label for="filtro-mes" style="font-weight: bold;">Mês:</label>
+                    <input type="month" id="filtro-mes"
+                        style="font-size: 1em; padding: 4px 8px; border-radius: 6px; border: 1px solid #b3d8f6;" />
+                    <button id="btn-filtrar-mes"
+                        style="padding: 4px 14px; font-size: 1em; border-radius: 6px; background: #2196f3; color: #fff; border: none; cursor: pointer; font-weight: semibold;">Filtrar</button>
+                    <button id="btn-limpar-filtro"
+                        style="padding: 4px 10px; font-size: 1em; border-radius: 6px; background: transparent; color: #2196f3; border: 1px solid #2196f3; cursor: pointer; font-weight: semibold;">Limpar</button>
+                </div>
+                <div id="cards-analise"></div>
+                <div
+                    style="display: flex; gap: 24px; justify-content: center; align-items: flex-start; margin-bottom: 15px; flex-wrap: wrap;">
+                    <canvas id="grafico-vendas" width="320" height="200" style="width: 320px; height: 200px;"></canvas>
+                    <canvas id="grafico-pizza" width="320" height="200" style="width: 320px; height: 200px;"></canvas>
+                    <canvas id="grafico-linha-vendas" width="400" height="220"
+                        style="width: 450px; height: 200px;"></canvas>
+                </div>
+
+            </section>
+
+            <section id="clientes" class="aba">
+                <h1>Clientes Cadastrados</h1>
+                <input type="text" id="busca-clientes" placeholder="Pesquisar por nome, CPF ou telefone"
+                    style="width:100%;max-width:400px;margin:16px 0 12px 0;padding:8px 12px;border-radius:6px;border:1px solid #b3d8f6;font-size:15px;">
+                <div id="lista-clientes"></div>
+            </section>
+
+            <section id="mensagens" class="aba">
+                <h1>Disparo de Mensagens</h1>
+                <div style="max-width: 700px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px #0001; padding: 24px 32px;">
+                    <label style="font-weight:bold; margin-bottom:8px; display:block;">Mensagem:</label>
+                    <div style="border:1px solid #b3d8f6; border-radius:8px; margin-bottom:16px;">
+                        <div id="toolbar-mensagem" style="background:#f5f5f5; border-bottom:1px solid #b3d8f6; padding:6px 8px; display:flex; gap:8px;">
+                                                            <style>
+                                                                                                .toolbar-btn {
+                                                                                                    background: #e3f2fd;
+                                                                                                    border: 1px solid #b3d8f6;
+                                                                                                    color: #1976d2;
+                                                                                                    font-size: 1em;
+                                                                                                    font-family: inherit;
+                                                                                                    border-radius: 6px;
+                                                                                                    padding: 6px 10px;
+                                                                                                    margin: 0;
+                                                                                                    cursor: pointer;
+                                                                                                    transition: background 0.2s, box-shadow 0.2s;
+                                                                                                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0);
+                                                                                                }
+                                                                                                .toolbar-btn:hover, .toolbar-btn:focus {
+                                                                                                    background: #bbdefb;
+                                                                                                    outline: none;
+                                                                                                }
+                                                                                                .toolbar-btn.selected {
+                                                                                                    background: #2280dfc7;
+                                                                                                    color: #fff;
+                                                                                                    border-color: #1976d2;
+                                                                                                    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
+                                                                                                }
+                                                            </style>
+                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('bold', false, null)" title="Negrito"><b>B</b></button>
+                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('italic', false, null)" title="Itálico"><i>I</i></button>
+                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('underline', false, null)" title="Sublinhado"><u>U</u></button>
+                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('insertUnorderedList', false, null)" title="Lista">• Lista</button>
+                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('insertOrderedList', false, null)" title="Lista Numerada">1. Lista</button>
+                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('removeFormat', false, null)" title="Remover Formatação">⨉</button>
+                        </div>
+                        <div id="editor-mensagem" contenteditable="true" style="min-height:120px; padding:12px; font-size:1.1em; outline:none;"></div>
+                    </div>
+                    <label style="font-weight:bold; margin-bottom:8px; display:block;">Imagem para disparo:</label>
+                    <input type="file" id="imagem-mensagem" accept="image/*" style="margin-bottom:12px;">
+                    <div id="preview-imagem-mensagem" style="margin-top:8px;"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Tela de Login/Cadastro de Usuário -->
+    <div id="login-screen-root"></div>
+    <script>
+        fetch('assets/login-screen.html').then(r => r.text()).then(html => {
+            document.getElementById('login-screen-root').innerHTML = html;
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./renderer.js" defer></script>
+</body>
+
+</html>
