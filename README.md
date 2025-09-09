@@ -43,6 +43,42 @@ Este aplicativo foi desenvolvido para facilitar o controle de estoque, vendas, c
 1. Instale as dependências: `npm install`
 2. Inicie o app: `npx electron .`
 
+## Como gerar o executável (.exe)
+
+Você pode empacotar o aplicativo em um arquivo executável usando o Electron Packager ou Electron Builder.
+
+### Usando Electron Packager
+
+1. Instale o Electron Packager:
+   ```powershell
+   npm install --save-dev electron-packager
+   ```
+2. Gere o executável:
+   ```powershell
+   npx electron-packager . soulfit-estoque --platform=win32 --arch=x64 --out=dist --overwrite
+   ```
+   O executável estará na pasta `dist/soulfit-estoque-win32-x64`.
+
+### Usando Electron Builder (opcional, para instalador)
+
+1. Instale o Electron Builder:
+   ```powershell
+   npm install --save-dev electron-builder
+   ```
+2. Adicione o script abaixo ao seu `package.json`:
+   ```json
+   "scripts": {
+     "build": "electron-builder"
+   }
+   ```
+3. Gere o instalador:
+   ```powershell
+   npm run build
+   ```
+   O instalador estará na pasta `dist`.
+
+Para mais detalhes, consulte a documentação oficial do [Electron Packager](https://github.com/electron/electron-packager) ou [Electron Builder](https://www.electron.build/).
+
 ---
 
-Para dúvidas ou sugestões, entre em contato com o desenvolvedor.
+Para dúvidas ou sugestões, entre em contato comigo.
