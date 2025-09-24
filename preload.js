@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('api', {
   editarMercadoria: (dados) => ipcRenderer.invoke('editar-mercadoria', dados),
   atualizarEstoque: (dados) => ipcRenderer.invoke('atualizar-estoque', dados),
   deletarMercadoria: (codigo) => ipcRenderer.invoke('deletar-mercadoria', codigo),
+  deletarVenda: (id_venda) => ipcRenderer.invoke('deletar-venda', id_venda),
 });
 
