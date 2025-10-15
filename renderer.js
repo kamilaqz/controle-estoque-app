@@ -1645,4 +1645,52 @@ async function carregarAnaliseGeral(mesSelecionado) {
       }
     });
   }
+
+  // Renderer.js: gerencia envio de mensagens, limpeza do editor e QR Code do WhatsApp
+  if (!window.listenerBotaoRegistrado) {
+      const botao = document.getElementById('botao-enviar-mensagem');
+
+      botao.addEventListener('click', async () => {
+
+          const editor = document.getElementById('editor-mensagem');
+          const inputImagem = document.getElementById('imagem-mensagem');
+          const preview = document.getElementById('preview-imagem-mensagem');
+
+          const mensagem = editor.innerText.trim();
+          const arquivo = inputImagem.files[0];
+
+          if (!mensagem && !arquivo) {
+              alert('⚠️ Digite uma mensagem ou selecione uma imagem!');
+              return;
+          }
+
+          await window.api.enviarMensagemGlobal(mensagem, arquivo ? arquivo.path : null);
+
+          editor.innerHTML = '';        
+          inputImagem.value = '';       
+          preview.innerHTML = '';       
+          editor.focus();               
+      });
+
+      window.listenerBotaoRegistrado = true;
+    } else {
+  }
+
+    const qrImg = document.getElementById('qr-code-img');
+    const resetBtn = document.getElementById('reset-session');
+
+    window.api.onQrGenerated((url) => {
+        qrImg.src = url;
+        qrImg.style.display = 'block';
+    });
+
+    window.api.requestQr();
+
+    resetBtn.addEventListener('click', async () => {
+    resetBtn.disabled = true; 
+    qrImg.src = '';
+    await window.api.resetWhatsappSession();
+    resetBtn.disabled = false; 
+  });
+
 }
