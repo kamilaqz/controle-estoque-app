@@ -228,13 +228,20 @@
                                                             <button type="button" class="toolbar-btn" onclick="document.execCommand('underline', false, null)" title="Sublinhado"><u>U</u></button>
                                                             <button type="button" class="toolbar-btn" onclick="document.execCommand('insertUnorderedList', false, null)" title="Lista">• Lista</button>
                                                             <button type="button" class="toolbar-btn" onclick="document.execCommand('insertOrderedList', false, null)" title="Lista Numerada">1. Lista</button>
-                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('removeFormat', false, null)" title="Remover Formatação">⨉</button>
                         </div>
                         <div id="editor-mensagem" contenteditable="true" style="min-height:120px; padding:12px; font-size:1.1em; outline:none;"></div>
                     </div>
                     <label style="font-weight:bold; margin-bottom:8px; display:block;">Imagem para disparo:</label>
-                    <input type="file" id="imagem-mensagem" accept="image/*" style="margin-bottom:12px;">
+                    <input type="file" id="imagem-mensagem" accept="image/*" style="display:block; margin-bottom:16px;">
+                    <button id="botao-enviar-mensagem" class="btn primario">Enviar Mensagem</button>
                     <div id="preview-imagem-mensagem" style="margin-top:8px;"></div>
+                    <div id="qr-container" style="margin:16px auto 0 auto; text-align:center; background:#fff; padding:16px; display:block; border:1px solid #ccc; max-width:250px;">
+                         <p style="font-size:1.1em; font-weight:bold; color:#0d0d0e; margin-bottom:16px;">
+                            Escaneie o QR Code para WhatsApp
+                        </p>
+                        <img id="qr-code-img" alt="QR Code" style="width:200px; height:200px; display:block; margin: 0 auto;">
+                        <button id="reset-session" class="btn secundario" style="margin-top:12px;">Reiniciar sessão WhatsApp</button>
+                    </div>
                 </div>
             </section>
         </main>
