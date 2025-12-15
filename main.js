@@ -63,6 +63,7 @@ ipcMain.handle('salvar-imagem', async (e, { codigo, dataUrl }) => {
     }
 });
 
+ipcMain.handle('deletar-venda', (e, id_venda) => db.deletarVenda(id_venda));
 ipcMain.handle('editar-mercadoria', (e, dados) => db.editarMercadoria(dados));
 ipcMain.handle('atualizar-estoque', (e, dados) => db.atualizarEstoque(dados));
 ipcMain.handle('adicionar-variantes', (e, dados) => db.adicionarVariantes(dados));

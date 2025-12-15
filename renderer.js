@@ -1,3 +1,79 @@
+// ...existing code...
+
+// Adiciona botão de apagar venda no histórico
+function renderVendasAgrupadas(grupos) {
+  const lista = document.getElementById('lista-vendas');
+  if (!lista) return;
+  lista.innerHTML = grupos.map((grupo, idx) => {
+    const v = grupo[0];
+    const { data, hora } = formatarDataHora(v.data);
+    const total = grupo.reduce((acc, item) => acc + (item.preco || 0), 0);
+    const totalQtd = grupo.reduce((acc, item) => acc + (item.quantidade || 0), 0);
+    return `
+      <div class="item-venda card venda-accordion" style="margin-bottom:12px;">
+        <div class="venda-header" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:1em;" data-idx="${idx}">
+          <div>
+            <strong>${data}</strong> <span style="color:#888;font-size:0.95em;">${hora}</span> | R$ ${total.toFixed(2)} | ${v.metodo || '-'}
+            ${v.cliente_nome ? `| Cliente: <span style='color:#1976d2'>${v.cliente_nome}</span>` : ''}
+            | <b>Qtd:</b> ${totalQtd}
+          </div>
+          <span class="venda-toggle" style="font-size:1.0em;user-select:none;">&#x25BC;</span>
+          <button class="btn-apagar-venda" data-id-venda="${v.id_venda}" style="margin-left:10px;color:#c00;">🗑️ Apagar</button>
+        </div>
+        <div class="venda-detalhes" style="display:none;padding:10px 0 0 0;">
+          <b>Itens da venda:</b>
+          <ul style="margin:8px 0 0 0; padding-left:18px;">
+            ${grupo.map(item => `
+              <li>
+                <b>${item.codigo}</b> - Qtd: ${item.quantidade} - R$ ${item.preco?.toFixed(2) ?? '-'}
+                ${item.cor ? `| Cor: ${item.cor}` : ''}
+                ${item.tamanho ? `| Tam: ${item.tamanho === 'T.U.' ? 'Tamanho Único' : item.tamanho}` : ''}
+              </li>
+            `).join('')}
+          </ul>
+          <div style="margin-top:8px;">
+            <b>Método de Pagamento:</b> ${v.metodo ?? '-'}<br>
+            ${v.metodo === 'Cartão Crédito' ? `<b>Parcelas:</b> ${v.parcelas ? v.parcelas : '-'}<br>` : ''}
+            <b>Data:</b> ${data} <span style="color:#888;font-size:0.95em;">${hora}</span><br>
+            <b>Cliente:</b> ${v.cliente_nome || '-'}${v.cliente_cpf ? ' | CPF: ' + v.cliente_cpf : ''}${v.cliente_telefone ? ' | Tel: ' + v.cliente_telefone : ''}<br>
+            <b>Vendedor:</b> ${v.vendedor_nome || '-'}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  // Acordeon toggle (sempre após render)
+  setTimeout(() => {
+    document.querySelectorAll('.venda-header').forEach(header => {
+      header.onclick = function (e) {
+        // Evita abrir/fechar se clicar no botão de apagar
+        if (e.target.classList.contains('btn-apagar-venda')) return;
+        const detalhes = this.parentElement.querySelector('.venda-detalhes');
+        const toggle = this.querySelector('.venda-toggle');
+        if (detalhes.style.display === 'none' || detalhes.style.display === '') {
+          detalhes.style.display = 'block';
+          toggle.innerHTML = '&#x25B2;';
+        } else {
+          detalhes.style.display = 'none';
+          toggle.innerHTML = '&#x25BC;';
+        }
+      };
+    });
+    // Evento para apagar venda
+    document.querySelectorAll('.btn-apagar-venda').forEach(btn => {
+      btn.onclick = async function (e) {
+        e.stopPropagation();
+        if (confirm('Tem certeza que deseja apagar esta venda?')) {
+          const id_venda = btn.getAttribute('data-id-venda');
+          await window.api.deletarVenda(id_venda);
+          carregarVendas();
+          mostrarToast('Venda apagada com sucesso!');
+        }
+      };
+    });
+  }, 0);
+}
+// ...existing code...
 // Destacar botões do editor de mensagens quando selecionados
 const toolbar = document.getElementById('toolbar-mensagem');
 const editor = document.getElementById('editor-mensagem');
@@ -79,17 +155,37 @@ async function carregarClientes() {
   }
   // Filtro
   const buscaInput = document.getElementById('busca-clientes');
+  function normalizarDataParaComparacao(data) {
+    if (!data) return '';
+    // Aceita AAAA-MM-DD ou DD/MM/AAAA
+    if (/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+      const [ano, mes, dia] = data.split('-');
+      return `${dia}/${mes}/${ano}`;
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(data)) {
+      return data;
+    }
+    return data;
+  }
   function filtrar() {
     const termo = (buscaInput?.value || '').toLowerCase().trim();
     if (!termo) {
       renderTabela(clientes);
       return;
     }
-    const filtrados = clientes.filter(c =>
-      (c.nome && c.nome.toLowerCase().includes(termo)) ||
-      (c.telefone && c.telefone.toLowerCase().includes(termo)) ||
-      (c.nascimento && formatarData(c.nascimento).includes(termo))
-    );
+    const filtrados = clientes.filter(c => {
+      const nome = (c.nome || '').toLowerCase();
+      const telefone = (c.telefone || '').toLowerCase();
+      const nasc = (c.nascimento || '');
+      const nascFormatada = normalizarDataParaComparacao(nasc).toLowerCase();
+      // Permite buscar por parte da data em ambos formatos
+      return (
+        nome.includes(termo) ||
+        telefone.includes(termo) ||
+        nascFormatada.includes(termo) ||
+        nasc.includes(termo)
+      );
+    });
     renderTabela(filtrados);
   }
   buscaInput?.removeEventListener('input', filtrar);
@@ -707,6 +803,15 @@ document.addEventListener('DOMContentLoaded', () => {
         vNomeInput.value = c.nome;
         if (vCpfInput) vCpfInput.value = c.cpf || '';
         if (vPhoneInput) vPhoneInput.value = c.telefone || '';
+        if (vNascimentoInput) {
+          let nasc = c.nascimento || '';
+          // Se vier no formato DD/MM/YYYY, converte para YYYY-MM-DD
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(nasc)) {
+            const [dia, mes, ano] = nasc.split('/');
+            nasc = `${ano}-${mes}-${dia}`;
+          }
+          vNascimentoInput.value = nasc;
+        }
         removeDropdown();
       });
       acDropdown.appendChild(opt);
@@ -1472,6 +1577,11 @@ async function carregarVendas(filtro = '') {
               <b>Data:</b> ${data} <span style="color:#888;font-size:0.95em;">${hora}</span><br>
               <b>Cliente:</b> ${v.cliente_nome || '-'}${v.cliente_cpf ? ' | CPF: ' + v.cliente_cpf : ''}${v.cliente_telefone ? ' | Tel: ' + v.cliente_telefone : ''}<br>
               <b>Vendedor:</b> ${v.vendedor_nome || '-'}
+              <div style="margin-top:16px; display:flex; justify-content:flex-end;">
+                <button class="btn-apagar-venda" data-id-venda="${v.id_venda}" style="background:#fff0f0;border:1px solid #e57373;color:#c00;padding:6px 16px;border-radius:6px;font-size:0.80em;cursor:pointer;transition:background 0.2s;">
+                  Apagar venda
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1480,7 +1590,9 @@ async function carregarVendas(filtro = '') {
     // Acordeon toggle (sempre após render)
     setTimeout(() => {
       document.querySelectorAll('.venda-header').forEach(header => {
-        header.onclick = function () {
+        header.onclick = function (e) {
+          // Evita abrir/fechar se clicar no botão de apagar
+          if (e.target.classList.contains('btn-apagar-venda')) return;
           const detalhes = this.parentElement.querySelector('.venda-detalhes');
           const toggle = this.querySelector('.venda-toggle');
           if (detalhes.style.display === 'none' || detalhes.style.display === '') {
@@ -1489,6 +1601,18 @@ async function carregarVendas(filtro = '') {
           } else {
             detalhes.style.display = 'none';
             toggle.innerHTML = '&#x25BC;';
+          }
+        };
+      });
+      // Evento para apagar venda
+      document.querySelectorAll('.btn-apagar-venda').forEach(btn => {
+        btn.onclick = async function (e) {
+          e.stopPropagation();
+          const id_venda = btn.getAttribute('data-id-venda');
+          if (confirm('Tem certeza que deseja apagar esta venda?')) {
+            await window.api.deletarVenda(id_venda);
+            carregarVendas();
+            mostrarToast('Venda apagada com sucesso!');
           }
         };
       });

@@ -23,5 +23,6 @@ contextBridge.exposeInMainWorld('api', {
     console.log("🔗 preload: enviarMensagemGlobal chamada com", mensagem, arquivo);
     return ipcRenderer.invoke('enviar-mensagem-global', mensagem, arquivo);
 },
+  deletarVenda: (id_venda) => ipcRenderer.invoke('deletar-venda', id_venda),
 });
 

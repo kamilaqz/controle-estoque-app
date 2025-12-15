@@ -3,13 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 
-const dbDir = 'C:\googledrive\soulfit';if (!fs.existsSync(dbDir)) {
+const dbDir = 'G:/Meu Drive/soulfitdb';
+if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir);
 }
 
 const dbPath = path.join(dbDir, 'estoque.db');
 const db = new sqlite3.Database(dbPath);
-
 
 // Inicialização
 db.serialize(() => {
@@ -29,7 +29,7 @@ db.serialize(() => {
         UNIQUE(codigo_mercadoria, cor, tamanho),
         FOREIGN KEY(codigo_mercadoria) REFERENCES mercadorias(codigo)
     )`);
-        db.run(`CREATE TABLE IF NOT EXISTS clientes (
+    db.run(`CREATE TABLE IF NOT EXISTS clientes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT,
     cpf TEXT,
@@ -37,13 +37,13 @@ db.serialize(() => {
     nascimento TEXT,
     UNIQUE(nome, cpf, telefone, nascimento)
 )`);
-        db.run(`CREATE TABLE IF NOT EXISTS usuarios (
+    db.run(`CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             cpf TEXT NOT NULL,
             senha TEXT NOT NULL UNIQUE
         )`);
-        db.run(`CREATE TABLE IF NOT EXISTS vendas (
+    db.run(`CREATE TABLE IF NOT EXISTS vendas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         id_venda TEXT,
         codigo TEXT,
@@ -62,8 +62,8 @@ db.serialize(() => {
 
 module.exports = {
     addMercadoria({ codigo, nome, preco, imagem, variantes }) {
-            return new Promise((res, rej) => {
-                db.run(`
+        return new Promise((res, rej) => {
+            db.run(`
       INSERT INTO mercadorias (codigo, nome, preco, imagem)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(codigo) DO UPDATE SET
@@ -71,35 +71,35 @@ module.exports = {
         preco = excluded.preco,
         imagem = excluded.imagem
     `,
-                    [codigo, nome, preco, imagem],
-                    (err) => {
-                        if (err) rej(err);
-                        else {
-                            // Remove variantes antigas
-                            db.run(`DELETE FROM variantes WHERE codigo_mercadoria = ?`, [codigo], (err2) => {
-                                if (err2) rej(err2);
-                                else if (Array.isArray(variantes)) {
-                                    // Insere variantes novas
-                                    let pending = variantes.length;
-                                    if (pending === 0) return res();
-                                    variantes.forEach(v => {
-                                        db.run(`INSERT INTO variantes (codigo_mercadoria, cor, tamanho, quantidade) VALUES (?, ?, ?, ?)`,
-                                            [codigo, v.cor, v.tamanho, v.quantidade],
-                                            (err3) => {
-                                                if (err3) rej(err3);
-                                                else if (--pending === 0) res();
-                                            }
-                                        );
-                                    });
-                                } else {
-                                    res();
-                                }
-                            });
-                        }
+                [codigo, nome, preco, imagem],
+                (err) => {
+                    if (err) rej(err);
+                    else {
+                        // Remove variantes antigas
+                        db.run(`DELETE FROM variantes WHERE codigo_mercadoria = ?`, [codigo], (err2) => {
+                            if (err2) rej(err2);
+                            else if (Array.isArray(variantes)) {
+                                // Insere variantes novas
+                                let pending = variantes.length;
+                                if (pending === 0) return res();
+                                variantes.forEach(v => {
+                                    db.run(`INSERT INTO variantes (codigo_mercadoria, cor, tamanho, quantidade) VALUES (?, ?, ?, ?)`,
+                                        [codigo, v.cor, v.tamanho, v.quantidade],
+                                        (err3) => {
+                                            if (err3) rej(err3);
+                                            else if (--pending === 0) res();
+                                        }
+                                    );
+                                });
+                            } else {
+                                res();
+                            }
+                        });
                     }
-                );
-            });
-        },
+                }
+            );
+        });
+    },
     getMercadorias() {
         return new Promise((res, rej) => {
             db.all(`SELECT * FROM mercadorias`, [], (err, mercadorias) => {
@@ -140,24 +140,24 @@ module.exports = {
             }
             db.get(`SELECT id FROM clientes WHERE nome = ? AND cpf = ? AND telefone = ? AND nascimento = ?`,
                 [cliente_nome, cliente_cpf, cliente_telefone, cliente_nascimento], (err, row) => {
-                if (err) return rej(err);
-                const insertVenda = (clienteId) => {
-                    db.run(`INSERT INTO vendas (id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, cliente_id, vendedor_nome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, clienteId, vendedor_nome], (err) => {
-                            if (err) rej(err);
-                            else descontarVariante();
-                        });
-                };
-                if (row && row.id) {
-                    insertVenda(row.id);
-                } else {
-                    db.run(`INSERT INTO clientes (nome, cpf, telefone, nascimento) VALUES (?, ?, ?, ?)`,
-                        [cliente_nome, cliente_cpf, cliente_telefone, cliente_nascimento], function(err) {
-                            if (err) rej(err);
-                            else insertVenda(this.lastID);
-                        });
-                }
-            });
+                    if (err) return rej(err);
+                    const insertVenda = (clienteId) => {
+                        db.run(`INSERT INTO vendas (id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, cliente_id, vendedor_nome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, clienteId, vendedor_nome], (err) => {
+                                if (err) rej(err);
+                                else descontarVariante();
+                            });
+                    };
+                    if (row && row.id) {
+                        insertVenda(row.id);
+                    } else {
+                        db.run(`INSERT INTO clientes (nome, cpf, telefone, nascimento) VALUES (?, ?, ?, ?)`,
+                            [cliente_nome, cliente_cpf, cliente_telefone, cliente_nascimento], function (err) {
+                                if (err) rej(err);
+                                else insertVenda(this.lastID);
+                            });
+                    }
+                });
         });
     },
     getClientes() {
@@ -258,7 +258,70 @@ module.exports = {
             });
         });
     },
-        // Usuários
+
+    deletarVenda(id_venda) {
+        return new Promise((res, rej) => {
+           
+
+            // Busca todas as linhas da venda
+            db.all(`SELECT codigo, cor, tamanho, quantidade FROM vendas WHERE id_venda = ?`, [id_venda], (err, rows) => {
+                if (err) return rej(err);
+
+                if (rows && rows.length) {
+                    let pending = rows.length;
+                    rows.forEach(({ codigo, cor, tamanho, quantidade }) => {
+
+                        db.get(`SELECT quantidade FROM variantes WHERE codigo_mercadoria = ? AND cor = ? AND tamanho = ?`,
+                            [codigo, cor, tamanho],
+                            (err2, variante) => {
+                                if (err2) return rej(err2);
+
+
+                                if (variante) {
+                                    // Variante existe, só atualiza
+                                    db.run(`UPDATE variantes SET quantidade = quantidade + ? WHERE codigo_mercadoria = ? AND cor = ? AND tamanho = ?`,
+                                        [quantidade, codigo, cor, tamanho],
+                                        (err3) => {
+                                            if (err3) {
+                                                return rej(err3);
+                                            }
+                                            if (--pending === 0) {
+                                                db.run(`DELETE FROM vendas WHERE id_venda = ?`, [id_venda], (err4) => {
+                                                    if (err4) rej(err4); else res();
+                                                });
+                                            }
+                                        }
+                                    );
+                                } else {
+                                    // Variante não existe, cria
+                                    db.run(`INSERT INTO variantes (codigo_mercadoria, cor, tamanho, quantidade) VALUES (?, ?, ?, ?)`,
+                                        [codigo, cor, tamanho, quantidade],
+                                        (err5) => {
+                                            if (err5) {
+                                                return rej(err5);
+                                            }
+                                            if (--pending === 0) {
+                                                db.run(`DELETE FROM vendas WHERE id_venda = ?`, [id_venda], (err6) => {
+                                                    if (err6) rej(err6); else res();
+                                                });
+                                            }
+                                        }
+                                    );
+                                }
+                            }
+                        );
+                    });
+                } else {
+                    console.log('Nenhuma row encontrada para a venda:', id_venda);
+                    // Se não achou a venda, só tenta deletar
+                    db.run(`DELETE FROM vendas WHERE id_venda = ?`, [id_venda], (err3) => {
+                        if (err3) rej(err3); else res();
+                    });
+                }
+            });
+        });
+    },
+    // Usuários
     cadastrarUsuario({ nome, cpf, senha }) {
         return new Promise((res, rej) => {
             db.run(`INSERT INTO usuarios (nome, cpf, senha) VALUES (?, ?, ?)`,
