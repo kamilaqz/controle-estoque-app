@@ -107,6 +107,7 @@
 .dialog-box input[type="text"],
 .dialog-box input[type="number"],
 .dialog-box input[type="file"],
+.dialog-box select,
 #estoque-cor, #estoque-tamanho {
   width: 100%;
   margin-top: 2px;
@@ -155,6 +156,61 @@
   padding: 0;
   box-sizing: border-box;
   font-family: "Inter", sans-serif;
+}
+
+:root {
+  --sf-primary: #2196f3;
+  --sf-primary-dark: #1976d2;
+  --sf-surface: #ffffff;
+  --sf-border: #b3d8f6;
+  --sf-muted: #e3f2fd;
+  --sf-danger: #c62828;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--sf-primary);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 1px 3px #0001;
+}
+
+.btn.primario {
+  background: var(--sf-primary);
+  border-color: var(--sf-primary);
+  color: #fff;
+}
+
+.btn.primario:hover {
+  background: var(--sf-primary-dark);
+  border-color: var(--sf-primary-dark);
+}
+
+.btn.secundario {
+  background: #f7fbff;
+  color: var(--sf-primary);
+  border-color: var(--sf-border);
+}
+
+.btn.secundario:hover {
+  background: var(--sf-muted);
+  border-color: var(--sf-primary);
+  color: var(--sf-primary-dark);
+}
+
+.btn:focus {
+  outline: 2px solid #90caf9;
+  outline-offset: 2px;
 }
 
 /* Layout principal */

@@ -48,6 +48,7 @@
                     <li onclick="abrirAba('historico')">📚 Histórico</li>
                     <li onclick="abrirAba('graficos')">📊 Estatísticas</li>
                     <li onclick="abrirAba('clientes')">👤 Clientes</li>
+                    <li onclick="abrirAba('pagamentos')">💰 Pagamentos</li>
                     <li onclick="abrirAba('mensagens')">💬 Disparo de Mensagens</li>
                 </ul>
             </nav>
@@ -87,8 +88,14 @@
                         Adicionar Cor</button>
                     <button type="submit">Salvar Mercadoria</button>
                 </form>
-                <input type="text" id="busca-mercadorias" placeholder="Pesquisar por código ou nome do produto"
-                    style="width:100%;max-width:400px;margin:16px 0 12px 0;padding:8px 12px;border-radius:6px;border:1px solid #b3d8f6;font-size:15px;">
+                <div style="display:flex; gap:8px; align-items:center; margin:16px 0 12px 0; flex-wrap:wrap;">
+                    <input type="text" id="busca-mercadorias" placeholder="Pesquisar por código ou nome do produto"
+                        style="flex:1;min-width:240px;padding:8px 12px;border-radius:6px;border:1px solid #b3d8f6;font-size:15px;">
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button id="btn-exportar-mercadorias" class="btn secundario">⬇️ Exportar</button>
+                        <button id="btn-importar-mercadorias" class="btn secundario">⬆️ Importar</button>
+                    </div>
+                </div>
                 <div id="lista-mercadorias"></div>
             </section>
 
@@ -129,11 +136,49 @@
                         <option value="Cartão Crédito">Cartão (Crédito)</option>
                         <option value="Cartão Débito">Cartão (Débito)</option>
                         <option value="PIX">PIX</option>
+                        <option value="Fiado">Fiado</option>
                     </select>
+
                     <div id="parcelas-container" style="display:none; margin-top:8px;">
                         <label for="parcelas">Número de Parcelas:</label>
                         <input type="number" id="parcelas" min="1" max="12" value="1"
                             style="width:80px; margin-left:8px;" />
+                    </div>
+
+                    <!-- Container para campos do Fiado -->
+                    <div id="fiado-container" style="display:none; margin-top:12px;">
+                        <fieldset style="padding:1em;border:1px solid #ccc;border-radius:8px;">
+                            <legend style="font-weight:bold; color:#444;">Detalhes do Fiado</legend>
+
+                            <div style="margin-bottom:12px;">
+                                <label style="font-weight:bold; display:block; margin-bottom:8px;color:#444;">
+                                    Alguma quantia foi paga no momento da compra?
+                                </label>
+                                <label style="margin-right:16px;">
+                                    <input type="radio" name="fiado_pago_parcial" value="sim" /> Sim
+                                </label>
+                                <label>
+                                    <input type="radio" name="fiado_pago_parcial" value="nao" checked /> Não
+                                </label>
+                            </div>
+
+                            <div id="valor-pago-container" style="display:none; margin-bottom:12px;">
+                                <label for="valor_pago" style="font-weight:bold; display:block; margin-bottom:4px;">
+                                    Valor pago no momento da compra:
+                                </label>
+                                <input type="number" id="valor_pago" placeholder="R$ 0,00" step="0.01" min="0"
+                                    style="width:150px;" />
+                            </div>
+
+                            <div>
+                                <label for="observacoes_fiado"
+                                    style="font-weight:bold; display:block; margin-bottom:4px;">
+                                    Observações:
+                                </label>
+                                <textarea id="observacoes_fiado" placeholder="Digite observações sobre o fiado..."
+                                    rows="3" style="width:100%; padding:8px; border-radius:5px; border:1px solid #b3d8f6; font-size:15px; resize:vertical; font-family: inherit;"></textarea>
+                            </div>
+                        </fieldset>
                     </div>
 
                     <fieldset style="margin-top:1em;padding:1em 0.5em;border:1px solid #ccc;border-radius:8px;">
@@ -187,60 +232,126 @@
 
             <section id="clientes" class="aba">
                 <h1>Clientes Cadastrados</h1>
-                <input type="text" id="busca-clientes" placeholder="Pesquisar por nome, CPF ou data de nascimento (dd/mm/aaaa)"
+                <input type="text" id="busca-clientes"
+                    placeholder="Pesquisar por nome, CPF ou data de nascimento (dd/mm/aaaa)"
                     style="width:100%;max-width:400px;margin:16px 0 12px 0;padding:8px 12px;border-radius:6px;border:1px solid #b3d8f6;font-size:15px;">
                 <div id="lista-clientes"></div>
             </section>
 
+            <section id="pagamentos" class="aba">
+                <h1>Controle de Pagamentos</h1>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <!-- Card: Clientes com Dívidas -->
+                    <div class="card" style="padding: 20px;">
+                        <h2 style="margin-top: 0; color: #1976d2; font-size: 1.3em; margin-bottom: 8px">🧾 Clientes com Dívidas</h2>
+                        <input type="text" id="busca-devedores" placeholder="Buscar cliente..." 
+                            style="width:100%; margin-bottom:12px; padding:8px; border-radius:6px; border:1px solid #b3d8f6;" />
+                        <div id="lista-devedores" style="max-height: 400px; overflow-y: auto;"></div>
+                    </div>
+
+                    <!-- Card: Registrar Pagamento -->
+                    <div class="card" style="padding: 20px;">
+                        <h2 style="margin-top: 0; color: #4caf50; font-size: 1.3em; margin-bottom: 8px">💵 Registrar Pagamento</h2>
+                        <form id="form-pagamento">
+                            <label for="pagamento-cliente" style="font-weight: bold; display: block; margin-bottom: 4px;">Cliente:</label>
+                            <select id="pagamento-cliente" required style="width:100%; padding:8px; margin-bottom:12px; border-radius:6px; border:1px solid #b3d8f6;">
+                                <option value="">Selecione um cliente</option>
+                            </select>
+
+                            <div id="info-divida" style="background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 12px; display: none;">
+                                <strong style="color: #856404;">Dívida Atual:</strong> 
+                                <span id="valor-divida-atual" style="font-size: 1.2em; color: #d32f2f;">R$ 0,00</span>
+                            </div>
+
+                            <label for="pagamento-valor" style="font-weight: bold; display: block; margin-bottom: 4px;">Valor Recebido:</label>
+                            <input type="number" id="pagamento-valor" placeholder="R$ 0,00" step="0.01" min="0.01" required 
+                                style="width:100%; padding:8px; margin-bottom:12px; border-radius:6px; border:1px solid #b3d8f6;" />
+
+                            <label for="pagamento-obs" style="font-weight: bold; display: block; margin-bottom: 4px;">Observações:</label>
+                            <textarea id="pagamento-obs" placeholder="Digite observações..." rows="3" 
+                                style="width:100%; padding:8px; border-radius:5px; border:1px solid #b3d8f6; font-size:15px; resize:vertical; font-family: inherit; margin-bottom:12px;"></textarea>
+
+                            <button type="submit" class="btn primario" style="width: 100%;">Registrar Pagamento</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Histórico de Pagamentos -->
+                <div class="card" style="padding: 20px; margin-top: 20px;">
+                    <h2 style="margin-top: 0; color: #1976d2; font-size: 1.3em; margin-bottom: 8px">📋 Histórico de Pagamentos</h2>
+                    <input type="text" id="busca-pagamentos" placeholder="Buscar por cliente ou data..." 
+                        style="width:100%; max-width:400px; margin-bottom:16px; padding:8px; border-radius:6px; border:1px solid #b3d8f6;" />
+                    <div id="lista-pagamentos"></div>
+                </div>
+            </section>
+
             <section id="mensagens" class="aba">
                 <h1>Disparo de Mensagens</h1>
-                <div style="max-width: 700px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px #0001; padding: 24px 32px;">
+                <div
+                    style="max-width: 700px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px #0001; padding: 24px 32px;">
                     <label style="font-weight:bold; margin-bottom:8px; display:block;">Mensagem:</label>
                     <div style="border:1px solid #b3d8f6; border-radius:8px; margin-bottom:16px;">
-                        <div id="toolbar-mensagem" style="background:#f5f5f5; border-bottom:1px solid #b3d8f6; padding:6px 8px; display:flex; gap:8px;">
-                                                            <style>
-                                                                                                .toolbar-btn {
-                                                                                                    background: #e3f2fd;
-                                                                                                    border: 1px solid #b3d8f6;
-                                                                                                    color: #1976d2;
-                                                                                                    font-size: 1em;
-                                                                                                    font-family: inherit;
-                                                                                                    border-radius: 6px;
-                                                                                                    padding: 6px 10px;
-                                                                                                    margin: 0;
-                                                                                                    cursor: pointer;
-                                                                                                    transition: background 0.2s, box-shadow 0.2s;
-                                                                                                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0);
-                                                                                                }
-                                                                                                .toolbar-btn:hover, .toolbar-btn:focus {
-                                                                                                    background: #bbdefb;
-                                                                                                    outline: none;
-                                                                                                }
-                                                                                                .toolbar-btn.selected {
-                                                                                                    background: #2280dfc7;
-                                                                                                    color: #fff;
-                                                                                                    border-color: #1976d2;
-                                                                                                    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
-                                                                                                }
-                                                            </style>
-                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('bold', false, null)" title="Negrito"><b>B</b></button>
-                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('italic', false, null)" title="Itálico"><i>I</i></button>
-                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('underline', false, null)" title="Sublinhado"><u>U</u></button>
-                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('insertUnorderedList', false, null)" title="Lista">• Lista</button>
-                                                            <button type="button" class="toolbar-btn" onclick="document.execCommand('insertOrderedList', false, null)" title="Lista Numerada">1. Lista</button>
+                        <div id="toolbar-mensagem"
+                            style="background:#f5f5f5; border-bottom:1px solid #b3d8f6; padding:6px 8px; display:flex; gap:8px;">
+                            <style>
+                                .toolbar-btn {
+                                    background: #e3f2fd;
+                                    border: 1px solid #b3d8f6;
+                                    color: #1976d2;
+                                    font-size: 1em;
+                                    font-family: inherit;
+                                    border-radius: 6px;
+                                    padding: 6px 10px;
+                                    margin: 0;
+                                    cursor: pointer;
+                                    transition: background 0.2s, box-shadow 0.2s;
+                                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0);
+                                }
+
+                                .toolbar-btn:hover,
+                                .toolbar-btn:focus {
+                                    background: #bbdefb;
+                                    outline: none;
+                                }
+
+                                .toolbar-btn.selected {
+                                    background: #2280dfc7;
+                                    color: #fff;
+                                    border-color: #1976d2;
+                                    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
+                                }
+                            </style>
+                            <button type="button" class="toolbar-btn"
+                                onclick="document.execCommand('bold', false, null)" title="Negrito"><b>B</b></button>
+                            <button type="button" class="toolbar-btn"
+                                onclick="document.execCommand('italic', false, null)" title="Itálico"><i>I</i></button>
+                            <button type="button" class="toolbar-btn"
+                                onclick="document.execCommand('underline', false, null)"
+                                title="Sublinhado"><u>U</u></button>
+                            <button type="button" class="toolbar-btn"
+                                onclick="document.execCommand('insertUnorderedList', false, null)" title="Lista">•
+                                Lista</button>
+                            <button type="button" class="toolbar-btn"
+                                onclick="document.execCommand('insertOrderedList', false, null)"
+                                title="Lista Numerada">1. Lista</button>
                         </div>
-                        <div id="editor-mensagem" contenteditable="true" style="min-height:120px; padding:12px; font-size:1.1em; outline:none;"></div>
+                        <div id="editor-mensagem" contenteditable="true"
+                            style="min-height:120px; padding:12px; font-size:1.1em; outline:none;"></div>
                     </div>
                     <label style="font-weight:bold; margin-bottom:8px; display:block;">Imagem para disparo:</label>
                     <input type="file" id="imagem-mensagem" accept="image/*" style="display:block; margin-bottom:16px;">
                     <button id="botao-enviar-mensagem" class="btn primario">Enviar Mensagem</button>
                     <div id="preview-imagem-mensagem" style="margin-top:8px;"></div>
-                    <div id="qr-container" style="margin:16px auto 0 auto; text-align:center; background:#fff; padding:16px; display:block; border:1px solid #ccc; max-width:250px;">
-                         <p style="font-size:1.1em; font-weight:bold; color:#0d0d0e; margin-bottom:16px;">
+                    <div id="qr-container"
+                        style="margin:16px auto 0 auto; text-align:center; background:#fff; padding:16px; display:block; border:1px solid #ccc; max-width:250px;">
+                        <p style="font-size:1.1em; font-weight:bold; color:#0d0d0e; margin-bottom:16px;">
                             Escaneie o QR Code para WhatsApp
                         </p>
-                        <img id="qr-code-img" alt="QR Code" style="width:200px; height:200px; display:block; margin: 0 auto;">
-                        <button id="reset-session" class="btn secundario" style="margin-top:12px;">Reiniciar sessão WhatsApp</button>
+                        <img id="qr-code-img" alt="QR Code"
+                            style="width:200px; height:200px; display:block; margin: 0 auto;">
+                        <button id="reset-session" class="btn secundario" style="margin-top:12px;">Reiniciar sessão
+                            WhatsApp</button>
                     </div>
                 </div>
             </section>

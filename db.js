@@ -56,6 +56,22 @@ db.serialize(() => {
         parcelas INTEGER,
         cliente_id INTEGER,
         vendedor_nome TEXT,
+        observacoes_fiado TEXT,
+        valor_pago REAL,
+        FOREIGN KEY(cliente_id) REFERENCES clientes(id)
+    )`);
+    
+    // Adiciona colunas caso já exista a tabela sem elas
+    db.run(`ALTER TABLE vendas ADD COLUMN observacoes_fiado TEXT`, () => {});
+    db.run(`ALTER TABLE vendas ADD COLUMN valor_pago REAL`, () => {});
+    
+    // Tabela de pagamentos
+    db.run(`CREATE TABLE IF NOT EXISTS pagamentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id INTEGER NOT NULL,
+        valor REAL NOT NULL,
+        data TEXT NOT NULL,
+        observacoes TEXT,
         FOREIGN KEY(cliente_id) REFERENCES clientes(id)
     )`);
 });
@@ -110,7 +126,7 @@ module.exports = {
                     const variantesPorCodigo = {};
                     for (const v of variantes) {
                         if (!variantesPorCodigo[v.codigo_mercadoria]) variantesPorCodigo[v.codigo_mercadoria] = [];
-                        variantesPorCodigo[v.codigo_mercadoria].push({ cor: v.cor, tamanho: v.tamanho, quantidade: v.quantidade });
+                        variantesPorCodigo[v.codigo_mercadoria].push({ id: v.id, cor: v.cor, tamanho: v.tamanho, quantidade: v.quantidade });
                     }
                     // Junta variantes a cada mercadoria
                     const resultado = mercadorias.map(m => ({ ...m, variantes: variantesPorCodigo[m.codigo] || [] }));
@@ -119,7 +135,7 @@ module.exports = {
             });
         });
     },
-    addVenda({ id_venda, codigo, cor, tamanho, data, metodo, preco, cliente_nome, cliente_cpf, cliente_telefone, cliente_nascimento, quantidade, parcelas, vendedor_nome }) {
+    addVenda({ id_venda, codigo, cor, tamanho, data, metodo, preco, cliente_nome, cliente_cpf, cliente_telefone, cliente_nascimento, quantidade, parcelas, vendedor_nome, observacoes_fiado, valor_pago }) {
         return new Promise((res, rej) => {
             if (!id_venda) {
                 id_venda = Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -131,8 +147,8 @@ module.exports = {
                     });
             }
             if (!cliente_nome && !cliente_cpf && !cliente_telefone) {
-                db.run(`INSERT INTO vendas (id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, cliente_id, vendedor_nome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-                    [id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, vendedor_nome], (err) => {
+                db.run(`INSERT INTO vendas (id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, cliente_id, vendedor_nome, observacoes_fiado, valor_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+                    [id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, vendedor_nome, observacoes_fiado, valor_pago], (err) => {
                         if (err) rej(err);
                         else descontarVariante();
                     });
@@ -142,8 +158,8 @@ module.exports = {
                 [cliente_nome, cliente_cpf, cliente_telefone, cliente_nascimento], (err, row) => {
                     if (err) return rej(err);
                     const insertVenda = (clienteId) => {
-                        db.run(`INSERT INTO vendas (id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, cliente_id, vendedor_nome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                            [id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, clienteId, vendedor_nome], (err) => {
+                        db.run(`INSERT INTO vendas (id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, cliente_id, vendedor_nome, observacoes_fiado, valor_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, clienteId, vendedor_nome, observacoes_fiado, valor_pago], (err) => {
                                 if (err) rej(err);
                                 else descontarVariante();
                             });
@@ -182,10 +198,32 @@ module.exports = {
     getEstatisticas() {
         return new Promise((res, rej) => {
             db.all(`
-                SELECT mes, COUNT(DISTINCT id_venda) as vendas, SUM(total) as total FROM (
-                    SELECT strftime('%Y-%m', data) as mes, id_venda, SUM(preco) as total
+                SELECT 
+                    mes, 
+                    COUNT(DISTINCT id_venda) as vendas, 
+                    SUM(total_vendas) + COALESCE(SUM(total_pagamentos), 0) as total 
+                FROM (
+                    SELECT 
+                        strftime('%Y-%m', data) as mes, 
+                        id_venda, 
+                        SUM(CASE 
+                            WHEN metodo = 'Fiado' AND valor_pago IS NOT NULL THEN valor_pago
+                            WHEN metodo = 'Fiado' AND valor_pago IS NULL THEN 0
+                            ELSE preco 
+                        END) as total_vendas,
+                        0 as total_pagamentos
                     FROM vendas
                     GROUP BY mes, id_venda
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        strftime('%Y-%m', data) as mes,
+                        NULL as id_venda,
+                        0 as total_vendas,
+                        SUM(valor) as total_pagamentos
+                    FROM pagamentos
+                    GROUP BY mes
                 )
                 GROUP BY mes
             `, [], (err, rows) => {
@@ -198,8 +236,19 @@ module.exports = {
             db.all(`
       SELECT
         (SELECT COUNT(*) FROM vendas) AS total_vendas,
-        (SELECT SUM(preco) FROM vendas) AS total_arrecadado,
-        (SELECT AVG(preco) FROM vendas) AS ticket_medio,
+        (
+            (SELECT COALESCE(SUM(CASE 
+                WHEN metodo = 'Fiado' AND valor_pago IS NOT NULL THEN valor_pago
+                WHEN metodo = 'Fiado' AND valor_pago IS NULL THEN 0
+                ELSE preco 
+            END), 0) FROM vendas) + 
+            (SELECT COALESCE(SUM(valor), 0) FROM pagamentos)
+        ) AS total_arrecadado,
+        (SELECT AVG(CASE 
+            WHEN metodo = 'Fiado' AND valor_pago IS NOT NULL THEN valor_pago
+            WHEN metodo = 'Fiado' AND valor_pago IS NULL THEN 0
+            ELSE preco 
+        END) FROM vendas) AS ticket_medio,
         (SELECT metodo FROM vendas GROUP BY metodo ORDER BY COUNT(*) DESC LIMIT 1) AS metodo_mais_usado,
         (SELECT nome FROM mercadorias WHERE codigo = (
             SELECT codigo FROM vendas GROUP BY codigo ORDER BY COUNT(*) DESC LIMIT 1
@@ -251,12 +300,81 @@ module.exports = {
             });
         });
     },
+    editarVariante({ id, cor, tamanho, quantidade }) {
+        return new Promise((res, rej) => {
+            const qtd = parseInt(quantidade, 10);
+            if (Number.isNaN(qtd) || qtd < 0) return rej(new Error('Quantidade inválida'));
+
+            db.serialize(() => {
+                db.get(`SELECT codigo_mercadoria FROM variantes WHERE id = ?`, [id], (err, row) => {
+                    if (err) return rej(err);
+                    if (!row) return rej(new Error('Variante não encontrada'));
+
+                    const codigo = row.codigo_mercadoria;
+
+                    db.get(`SELECT id, quantidade FROM variantes WHERE codigo_mercadoria = ? AND cor = ? AND tamanho = ? AND id <> ?`,
+                        [codigo, cor, tamanho, id],
+                        (err2, existente) => {
+                            if (err2) return rej(err2);
+
+                            if (existente) {
+                                const novaQtd = (parseInt(existente.quantidade, 10) || 0) + qtd;
+                                db.run(`UPDATE variantes SET quantidade = ? WHERE id = ?`,
+                                    [novaQtd, existente.id],
+                                    (err3) => {
+                                        if (err3) return rej(err3);
+                                        db.run(`DELETE FROM variantes WHERE id = ?`, [id], (err4) => {
+                                            if (err4) return rej(err4);
+                                            res({ merged: true, id: existente.id, quantidade: novaQtd });
+                                        });
+                                    }
+                                );
+                            } else {
+                                db.run(`UPDATE variantes SET cor = ?, tamanho = ?, quantidade = ? WHERE id = ?`,
+                                    [cor, tamanho, qtd, id],
+                                    (err5) => { if (err5) rej(err5); else res({ updated: true }); }
+                                );
+                            }
+                        }
+                    );
+                });
+            });
+        });
+    },
     deletarMercadoria(codigo) {
         return new Promise((res, rej) => {
             db.run(`DELETE FROM mercadorias WHERE codigo = ?`, [codigo], (err) => {
                 if (err) rej(err); else res();
             });
         });
+    },
+
+    async exportarMercadorias() {
+        const mercadorias = await this.getMercadorias();
+        return {
+            exportedAt: new Date().toISOString(),
+            items: mercadorias
+        };
+    },
+
+    async importarMercadorias(lista) {
+        if (!Array.isArray(lista)) throw new Error('Formato de importação inválido: esperado um array');
+        for (const item of lista) {
+            if (!item || !item.codigo) continue;
+            const variantes = Array.isArray(item.variantes) ? item.variantes.map(v => ({
+                cor: v.cor,
+                tamanho: v.tamanho,
+                quantidade: parseInt(v.quantidade, 10) || 0
+            })) : [];
+            await this.addMercadoria({
+                codigo: item.codigo,
+                nome: item.nome,
+                preco: item.preco,
+                imagem: item.imagem,
+                variantes
+            });
+        }
+        return { imported: lista.length };
     },
 
     deletarVenda(id_venda) {
@@ -345,6 +463,98 @@ module.exports = {
         return new Promise((res, rej) => {
             db.all(`SELECT id, nome, cpf FROM usuarios`, [], (err, rows) => {
                 if (err) rej(err); else res(rows);
+            });
+        });
+    },
+    // ------------------- PAGAMENTOS -------------------
+    addPagamento({ cliente_id, valor, data, observacoes }) {
+        return new Promise((res, rej) => {
+            db.run(`INSERT INTO pagamentos (cliente_id, valor, data, observacoes) VALUES (?, ?, ?, ?)`,
+                [cliente_id, valor, data, observacoes || ''], (err) => {
+                    if (err) rej(err); else res({ id: this.lastID });
+                });
+        });
+    },
+    getPagamentos() {
+        return new Promise((res, rej) => {
+            db.all(`
+                SELECT 
+                    p.id, 
+                    p.cliente_id, 
+                    p.valor, 
+                    p.data, 
+                    p.observacoes,
+                    c.nome as cliente_nome,
+                    c.telefone as cliente_telefone
+                FROM pagamentos p
+                LEFT JOIN clientes c ON p.cliente_id = c.id
+                ORDER BY p.data DESC
+            `, [], (err, rows) => {
+                if (err) rej(err); else res(rows);
+            });
+        });
+    },
+    getClientesComDivida() {
+        return new Promise((res, rej) => {
+            db.all(`
+                SELECT 
+                    c.id,
+                    c.nome,
+                    c.telefone,
+                    c.cpf,
+                    COALESCE(SUM(CASE 
+                        WHEN v.metodo = 'Fiado' THEN v.preco - COALESCE(v.valor_pago, 0)
+                        ELSE 0 
+                    END), 0) as total_divida,
+                    COALESCE(SUM(p.valor), 0) as total_pago
+                FROM clientes c
+                LEFT JOIN vendas v ON c.id = v.cliente_id
+                LEFT JOIN pagamentos p ON c.id = p.cliente_id
+                GROUP BY c.id, c.nome, c.telefone, c.cpf
+                HAVING (total_divida - total_pago) > 0
+                ORDER BY (total_divida - total_pago) DESC
+            `, [], (err, rows) => {
+                if (err) rej(err); 
+                else {
+                    // Calcula o saldo devedor (dívida - pagamentos)
+                    const result = rows.map(r => ({
+                        ...r,
+                        saldo_devedor: r.total_divida - r.total_pago
+                    }));
+                    res(result);
+                }
+            });
+        });
+    },
+    getDividaCliente(cliente_id) {
+        return new Promise((res, rej) => {
+            db.get(`
+                SELECT 
+                    COALESCE(SUM(CASE 
+                        WHEN v.metodo = 'Fiado' THEN v.preco - COALESCE(v.valor_pago, 0)
+                        ELSE 0 
+                    END), 0) as total_divida,
+                    COALESCE(SUM(p.valor), 0) as total_pago
+                FROM clientes c
+                LEFT JOIN vendas v ON c.id = v.cliente_id
+                LEFT JOIN pagamentos p ON c.id = p.cliente_id
+                WHERE c.id = ?
+                GROUP BY c.id
+            `, [cliente_id], (err, row) => {
+                if (err) rej(err);
+                else if (!row) res({ total_divida: 0, total_pago: 0, saldo_devedor: 0 });
+                else res({
+                    total_divida: row.total_divida,
+                    total_pago: row.total_pago,
+                    saldo_devedor: row.total_divida - row.total_pago
+                });
+            });
+        });
+    },
+    deletarPagamento(id) {
+        return new Promise((res, rej) => {
+            db.run(`DELETE FROM pagamentos WHERE id = ?`, [id], (err) => {
+                if (err) rej(err); else res();
             });
         });
     },

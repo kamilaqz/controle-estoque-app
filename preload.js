@@ -14,8 +14,11 @@ contextBridge.exposeInMainWorld('api', {
   salvarImagem: (imgData) => ipcRenderer.invoke('salvar-imagem', imgData),
   getClientes: () => ipcRenderer.invoke('get-clientes'),
   editarMercadoria: (dados) => ipcRenderer.invoke('editar-mercadoria', dados),
+  editarVariante: (dados) => ipcRenderer.invoke('editar-variante', dados),
   atualizarEstoque: (dados) => ipcRenderer.invoke('atualizar-estoque', dados),
   deletarMercadoria: (codigo) => ipcRenderer.invoke('deletar-mercadoria', codigo),
+  exportarMercadorias: () => ipcRenderer.invoke('exportar-mercadorias'),
+  importarMercadorias: () => ipcRenderer.invoke('importar-mercadorias'),
   onQrGenerated: (callback) => ipcRenderer.on('qr-code-generated', (event, url) => callback(url)),
   requestQr: () => ipcRenderer.send('request-qr'),
   resetWhatsappSession: () => ipcRenderer.invoke('reset-whatsapp-session'), 
@@ -24,5 +27,11 @@ contextBridge.exposeInMainWorld('api', {
     return ipcRenderer.invoke('enviar-mensagem-global', mensagem, arquivo);
 },
   deletarVenda: (id_venda) => ipcRenderer.invoke('deletar-venda', id_venda),
+  // Pagamentos
+  addPagamento: (dados) => ipcRenderer.invoke('add-pagamento', dados),
+  getPagamentos: () => ipcRenderer.invoke('get-pagamentos'),
+  getClientesComDivida: () => ipcRenderer.invoke('get-clientes-com-divida'),
+  getDividaCliente: (cliente_id) => ipcRenderer.invoke('get-divida-cliente', cliente_id),
+  deletarPagamento: (id) => ipcRenderer.invoke('deletar-pagamento', id),
 });
 

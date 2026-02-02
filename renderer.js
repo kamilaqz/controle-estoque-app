@@ -195,6 +195,197 @@ async function carregarClientes() {
 
 // Mostra aba clientes ao clicar no menu
 document.querySelector("[onclick=\"abrirAba('clientes')\"]")?.addEventListener('click', carregarClientes);
+
+// ================= PAGAMENTOS =================
+async function carregarPagamentos() {
+  await carregarClientesComDivida();
+  await carregarHistoricoPagamentos();
+  await preencherSelectClientes();
+}
+
+async function carregarClientesComDivida(filtro = '') {
+  const lista = document.getElementById('lista-devedores');
+  if (!lista) return;
+
+  const clientes = await window.api.getClientesComDivida();
+  
+  let clientesFiltrados = clientes;
+  if (filtro) {
+    const termo = filtro.toLowerCase();
+    clientesFiltrados = clientes.filter(c => 
+      c.nome?.toLowerCase().includes(termo) || 
+      c.telefone?.includes(termo)
+    );
+  }
+
+  if (clientesFiltrados.length === 0) {
+    lista.innerHTML = '<p style="color:#888; text-align:center; padding:20px;">Nenhum cliente com dívidas pendentes.</p>';
+    return;
+  }
+
+  lista.innerHTML = clientesFiltrados.map(c => `
+    <div class="card" style="padding: 12px; margin-bottom: 10px; background: #fff; border-left: 4px solid #f44336;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="font-size: 1.1em; color: #333;">${c.nome || 'Sem nome'}</strong>
+          ${c.telefone ? `<div style="color:#666; font-size:0.9em;">Tel: ${c.telefone}</div>` : ''}
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 0.85em; color: #666;">Dívida Total:</div>
+          <div style="font-size: 1.3em; font-weight: bold; color: #d32f2f;">R$ ${c.saldo_devedor.toFixed(2)}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function preencherSelectClientes() {
+  const select = document.getElementById('pagamento-cliente');
+  if (!select) return;
+
+  const clientes = await window.api.getClientes();
+  select.innerHTML = '<option value="">Selecione um cliente</option>' + 
+    clientes.map(c => `<option value="${c.id}">${c.nome || 'Sem nome'}${c.telefone ? ' - ' + c.telefone : ''}</option>`).join('');
+}
+
+async function carregarHistoricoPagamentos(filtro = '') {
+  const lista = document.getElementById('lista-pagamentos');
+  if (!lista) return;
+
+  const pagamentos = await window.api.getPagamentos();
+  
+  let pagamentosFiltrados = pagamentos;
+  if (filtro) {
+    const termo = filtro.toLowerCase();
+    pagamentosFiltrados = pagamentos.filter(p => {
+      const data = (p.data || '').split('T')[0].split('-').reverse().join('/');
+      return (p.cliente_nome?.toLowerCase().includes(termo) || data.includes(termo));
+    });
+  }
+
+  if (pagamentosFiltrados.length === 0) {
+    lista.innerHTML = '<p style="color:#888; text-align:center; padding:20px;">Nenhum pagamento registrado.</p>';
+    return;
+  }
+
+  function formatarDataHora(dataIso) {
+    if (!dataIso) return { data: '-', hora: '-' };
+    const d = new Date(dataIso);
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const ano = d.getFullYear();
+    const hora = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return { data: `${dia}/${mes}/${ano}`, hora: `${hora}:${min}` };
+  }
+
+  lista.innerHTML = pagamentosFiltrados.map(p => {
+    const { data, hora } = formatarDataHora(p.data);
+    return `
+      <div class="card" style="padding: 14px; margin-bottom: 12px; border-left: 4px solid #4caf50;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="flex: 1;">
+            <strong style="font-size: 1.05em; color: #333;">${p.cliente_nome || 'Cliente não identificado'}</strong>
+            <div style="color:#666; font-size:0.9em; margin-top: 4px;">
+              ${data} <span style="color:#999;">${hora}</span>
+            </div>
+            ${p.observacoes ? `<div style="color:#888; font-size:0.85em; margin-top:4px; font-style:italic;">${p.observacoes}</div>` : ''}
+          </div>
+          <div style="text-align: right; margin-left: 16px;">
+            <div style="font-size: 1.2em; font-weight: bold; color: #4caf50;">R$ ${p.valor.toFixed(2)}</div>
+            <button class="btn-apagar-pagamento" data-id="${p.id}" 
+              style="background:#ffebee; border:1px solid #ef5350; color:#c00; padding:4px 12px; border-radius:4px; font-size:0.8em; cursor:pointer; margin-top:6px;">
+              Excluir
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Adicionar eventos de exclusão
+  document.querySelectorAll('.btn-apagar-pagamento').forEach(btn => {
+    btn.onclick = async function() {
+      const id = parseInt(btn.getAttribute('data-id'));
+      if (confirm('Tem certeza que deseja excluir este pagamento?')) {
+        await window.api.deletarPagamento(id);
+        mostrarToast('Pagamento excluído com sucesso!');
+        carregarPagamentos();
+      }
+    };
+  });
+}
+
+// Event listeners para a aba de pagamentos
+document.addEventListener('DOMContentLoaded', () => {
+  const formPagamento = document.getElementById('form-pagamento');
+  const selectCliente = document.getElementById('pagamento-cliente');
+  const buscaDevedores = document.getElementById('busca-devedores');
+  const buscaPagamentos = document.getElementById('busca-pagamentos');
+
+  if (formPagamento) {
+    formPagamento.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const cliente_id = parseInt(document.getElementById('pagamento-cliente').value);
+      const valor = parseFloat(document.getElementById('pagamento-valor').value);
+      const observacoes = document.getElementById('pagamento-obs').value;
+      
+      if (!cliente_id) {
+        alert('Selecione um cliente!');
+        return;
+      }
+
+      await window.api.addPagamento({
+        cliente_id,
+        valor,
+        data: new Date().toISOString(),
+        observacoes
+      });
+
+      mostrarToast('Pagamento registrado com sucesso!');
+      formPagamento.reset();
+      document.getElementById('info-divida').style.display = 'none';
+      carregarPagamentos();
+    });
+  }
+
+  if (selectCliente) {
+    selectCliente.addEventListener('change', async function() {
+      const cliente_id = parseInt(this.value);
+      const infoDiv = document.getElementById('info-divida');
+      const valorSpan = document.getElementById('valor-divida-atual');
+      
+      if (!cliente_id) {
+        infoDiv.style.display = 'none';
+        return;
+      }
+
+      const divida = await window.api.getDividaCliente(cliente_id);
+      if (divida.saldo_devedor > 0) {
+        valorSpan.textContent = `R$ ${divida.saldo_devedor.toFixed(2)}`;
+        infoDiv.style.display = 'block';
+      } else {
+        infoDiv.style.display = 'none';
+      }
+    });
+  }
+
+  if (buscaDevedores) {
+    buscaDevedores.addEventListener('input', function() {
+      carregarClientesComDivida(this.value);
+    });
+  }
+
+  if (buscaPagamentos) {
+    buscaPagamentos.addEventListener('input', function() {
+      carregarHistoricoPagamentos(this.value);
+    });
+  }
+});
+
+document.querySelector("[onclick=\"abrirAba('pagamentos')\"]")?.addEventListener('click', carregarPagamentos);
+
 // Toast simples para confirmações visuais (deve ficar no topo para uso global)
 function mostrarToast(msg) {
   let toast = document.createElement('div');
@@ -559,7 +750,7 @@ window.atualizarGraficosComFiltro = async function atualizarGraficosComFiltro() 
 
   // Pie Chart (Métodos de pagamento)
   if (window._charts['grafico-pizza']) window._charts['grafico-pizza'].destroy();
-  const metodos = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX'];
+  const metodos = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX', 'Fiado'];
   const counts = metodos.map(m => vendas.length ? vendas.filter(v => v.metodo === m).length : 0);
   window._charts['grafico-pizza'] = new Chart(canvasPizza, {
     type: 'pie',
@@ -689,6 +880,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 60000); // verifica a cada minuto
 
+  // Importação/Exportação de mercadorias
+  const btnExportar = document.getElementById('btn-exportar-mercadorias');
+  const btnImportar = document.getElementById('btn-importar-mercadorias');
+
+  btnExportar?.addEventListener('click', async () => {
+    const result = await window.api.exportarMercadorias();
+    if (result?.error) {
+      alert('Erro ao exportar: ' + result.error);
+      return;
+    }
+    if (!result?.canceled) mostrarToast('Exportado para ' + (result.filePath || 'arquivo'));
+  });
+
+  btnImportar?.addEventListener('click', async () => {
+    const result = await window.api.importarMercadorias();
+    if (result?.error) {
+      alert('Erro ao importar: ' + result.error);
+      return;
+    }
+    if (!result?.canceled) {
+      _mercadoriasCache = [];
+      await carregarMercadorias();
+      mostrarToast('Importação concluída. Produtos: ' + (result.imported || 0));
+    }
+  });
+
   // Atualiza o valor total da venda em tempo real
   async function atualizarTotalVenda() {
     const mercadorias = await window.api.getMercadorias();
@@ -723,19 +940,51 @@ document.addEventListener('DOMContentLoaded', () => {
   bindTotalVendaListeners();
   atualizarTotalVenda();
 
-  // Exibe campo de parcelas se Cartão Crédito for selecionado
+  // Exibe campo de parcelas se Cartão Crédito for selecionado, ou campos de Fiado
   const metodoSelect = document.getElementById('metodo');
   const parcelasContainer = document.getElementById('parcelas-container');
-  if (metodoSelect && parcelasContainer) {
+  const fiadoContainer = document.getElementById('fiado-container');
+  const valorPagoContainer = document.getElementById('valor-pago-container');
+  const radiosPagoParcial = document.querySelectorAll('input[name="fiado_pago_parcial"]');
+
+  if (metodoSelect && parcelasContainer && fiadoContainer) {
     metodoSelect.addEventListener('change', function () {
       if (metodoSelect.value === 'Cartão Crédito') {
         parcelasContainer.style.display = '';
+        fiadoContainer.style.display = 'none';
+      } else if (metodoSelect.value === 'Fiado') {
+        parcelasContainer.style.display = 'none';
+        fiadoContainer.style.display = '';
       } else {
         parcelasContainer.style.display = 'none';
+        fiadoContainer.style.display = 'none';
       }
     });
     // Garante estado inicial
-    if (metodoSelect.value !== 'Cartão Crédito') parcelasContainer.style.display = 'none';
+    if (metodoSelect.value === 'Cartão Crédito') {
+      parcelasContainer.style.display = '';
+    } else if (metodoSelect.value === 'Fiado') {
+      fiadoContainer.style.display = '';
+    } else {
+      parcelasContainer.style.display = 'none';
+      fiadoContainer.style.display = 'none';
+    }
+  }
+
+  // Lógica para mostrar/ocultar campo de valor pago no Fiado
+  if (radiosPagoParcial.length && valorPagoContainer) {
+    radiosPagoParcial.forEach(radio => {
+      radio.addEventListener('change', function () {
+        if (this.value === 'sim') {
+          valorPagoContainer.style.display = '';
+          document.getElementById('valor_pago').required = true;
+        } else {
+          valorPagoContainer.style.display = 'none';
+          document.getElementById('valor_pago').required = false;
+          document.getElementById('valor_pago').value = '';
+        }
+      });
+    });
   }
 
   // --- CLIENT MASKS & AUTOCOMPLETE FOR VENDAS ---
@@ -918,8 +1167,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const itens = Array.from(document.querySelectorAll('.item-venda-linha'));
     const metodo = document.getElementById('metodo').value;
     let parcelas = 1;
+    let observacoes_fiado = null;
+    let valor_pago = null;
+
     if (metodo === 'Cartão Crédito') {
       parcelas = parseInt(document.getElementById('parcelas').value) || 1;
+    } else if (metodo === 'Fiado') {
+      observacoes_fiado = document.getElementById('observacoes_fiado')?.value || '';
+      const pagoParcial = document.querySelector('input[name="fiado_pago_parcial"]:checked')?.value;
+      if (pagoParcial === 'sim') {
+        valor_pago = parseFloat(document.getElementById('valor_pago').value) || 0;
+      }
     }
     // Dados do cliente
   const cliente_nome = vNomeInput ? vNomeInput.value : '';
@@ -991,7 +1249,9 @@ document.addEventListener('DOMContentLoaded', () => {
   cliente_telefone,
   cliente_nascimento,
         parcelas,
-        vendedor_nome
+        vendedor_nome,
+        observacoes_fiado,
+        valor_pago
       };
 
       await window.api.registrarVenda(venda);
@@ -1270,6 +1530,33 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+function abrirDialogConfirmacaoDeletarProduto({ nome = 'este produto', onConfirm }) {
+  const overlay = document.createElement('div');
+  overlay.className = 'dialog-overlay';
+  overlay.innerHTML = `
+    <div class="dialog-box" style="max-width:420px;">
+      <h3>Excluir produto</h3>
+      <p style="margin:0 0 14px 0; color:#444;">Deseja excluir <strong>${nome}</strong> e todo o estoque associado? Esta ação não pode ser desfeita.</p>
+      <div class="dialog-actions" style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
+        <button id="btn-cancelar-delete" class="btn-cancelar-edit">Cancelar</button>
+        <button id="btn-confirmar-delete" style="background:#d32f2f;">Excluir</button>
+      </div>
+    </div>
+  `;
+
+  const handleClose = () => overlay.remove();
+  overlay.querySelector('#btn-cancelar-delete').onclick = handleClose;
+  overlay.querySelector('#btn-confirmar-delete').onclick = async () => {
+    try {
+      if (typeof onConfirm === 'function') await onConfirm();
+    } finally {
+      handleClose();
+    }
+  };
+
+  document.body.appendChild(overlay);
+}
+
 async function carregarMercadorias(filtro = '') {
   const lista = document.getElementById('lista-mercadorias');
   if (!lista) return;
@@ -1312,6 +1599,7 @@ async function carregarMercadorias(filtro = '') {
           <div class="mercadoria-actions" style="margin-top:0.5em; display:flex; gap:0.5em; align-items:center;">
             <button class="btn-editar" title="Editar" data-codigo="${d.codigo}" style="padding:2px 8px;">✏️</button> 
             <button class="btn-deletar" title="Deletar" data-codigo="${d.codigo}" style="padding:2px 8px; color:#c00;">🗑️</button>  
+            <button class="btn-editar-variantes" title="Editar variantes" data-codigo="${d.codigo}" style="padding:2px 8px;">Editar variantes</button>
             <button class="btn-estoque" title="Atualizar estoque" data-codigo="${d.codigo}" style="padding:2px 8px;">Atualizar estoque</button>
           </div>
         </div>
@@ -1341,14 +1629,31 @@ async function carregarMercadorias(filtro = '') {
     });
   });
 
-  document.querySelectorAll('.btn-deletar').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
+  document.querySelectorAll('.btn-editar-variantes').forEach(btn => {
+    btn.addEventListener('click', async () => {
       const codigo = btn.getAttribute('data-codigo');
-      if (confirm('Tem certeza que deseja deletar este produto e todo o seu estoque?')) {
-        await window.api.deletarMercadoria(codigo);
-        _mercadoriasCache = [];
-        carregarMercadorias();
-      }
+      const mercadorias = await window.api.getMercadorias();
+      const item = mercadorias.find(m => m.codigo == codigo);
+      if (!item) return alert('Mercadoria não encontrada!');
+      abrirDialogEditarVariantes(item);
+    });
+  });
+
+  document.querySelectorAll('.btn-deletar').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const codigo = btn.getAttribute('data-codigo');
+      const mercadorias = _mercadoriasCache.length ? _mercadoriasCache : await window.api.getMercadorias();
+      const item = mercadorias.find(m => m.codigo == codigo);
+
+      abrirDialogConfirmacaoDeletarProduto({
+        nome: item?.nome || 'este produto',
+        onConfirm: async () => {
+          await window.api.deletarMercadoria(codigo);
+          _mercadoriasCache = [];
+          carregarMercadorias();
+          if (typeof mostrarToast === 'function') mostrarToast('Produto removido.');
+        }
+      });
     });
   });
 }
@@ -1396,6 +1701,64 @@ function abrirDialogEditar(item) {
     fecharDialogs();
     _mercadoriasCache = [];
     carregarMercadorias();
+  };
+}
+
+// Dialog para editar variantes (cor, tamanho, quantidade absoluta)
+function abrirDialogEditarVariantes(item) {
+  const variantes = Array.isArray(item.variantes) ? item.variantes : [];
+  const html = `
+    <div id="dialog-variantes" class="dialog-overlay">
+      <div class="dialog-box" style="max-width:640px;">
+        <h3>Editar variantes - ${item.nome}</h3>
+        <div style="max-height:320px; overflow-y:auto; margin-top:8px;">
+          ${variantes.length === 0 ? '<div style="color:#888;">Nenhuma variante cadastrada.</div>' : ''}
+          ${variantes.map(v => `
+            <div class="linha-variante-edit" data-id="${v.id}" style="display:grid; grid-template-columns: 1.2fr 1fr 0.8fr; gap:10px; align-items:center; margin-bottom:10px;">
+              <div>
+                <label style="font-weight:600; font-size:0.9em;">Cor</label>
+                <input type="text" class="edit-var-cor" value="${v.cor || ''}" />
+              </div>
+              <div>
+                <label style="font-weight:600; font-size:0.9em;">Tamanho</label>
+                <select class="edit-var-tamanho">
+                  ${['P','M','G','GG','T.U.'].map(t => `<option value="${t}" ${v.tamanho === t ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="font-weight:600; font-size:0.9em;">Quantidade</label>
+                <input type="number" min="0" class="edit-var-quantidade" value="${v.quantidade ?? 0}" />
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="dialog-actions" style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+          <button id="btn-salvar-variantes">Salvar</button>
+          <button id="btn-cancelar-variantes" class="btn-cancelar-edit">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  fecharDialogs();
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('btn-cancelar-variantes').onclick = fecharDialogs;
+  document.getElementById('btn-salvar-variantes').onclick = async function () {
+    const linhas = Array.from(document.querySelectorAll('.linha-variante-edit'));
+    for (const linha of linhas) {
+      const id = parseInt(linha.getAttribute('data-id'), 10);
+      const cor = linha.querySelector('.edit-var-cor').value.trim();
+      const tamanho = linha.querySelector('.edit-var-tamanho').value.trim();
+      const quantidade = parseInt(linha.querySelector('.edit-var-quantidade').value, 10);
+      if (!id || !cor || !tamanho || Number.isNaN(quantidade) || quantidade < 0) {
+        alert('Preencha cor, tamanho e quantidade (>= 0) para todas as linhas.');
+        return;
+      }
+      await window.api.editarVariante({ id, cor, tamanho, quantidade });
+    }
+    fecharDialogs();
+    _mercadoriasCache = [];
+    carregarMercadorias();
+    mostrarToast('Variantes atualizadas.');
   };
 }
 
@@ -1548,7 +1911,12 @@ async function carregarVendas(filtro = '') {
     lista.innerHTML = grupos.map((grupo, idx) => {
       const v = grupo[0];
       const { data, hora } = formatarDataHora(v.data);
-      const total = grupo.reduce((acc, item) => acc + (item.preco || 0), 0);
+      const total = grupo.reduce((acc, item) => {
+        if (item.metodo === 'Fiado') {
+          return acc + (item.valor_pago !== null && item.valor_pago !== undefined ? item.valor_pago : 0);
+        }
+        return acc + (item.preco || 0);
+      }, 0);
       const totalQtd = grupo.reduce((acc, item) => acc + (item.quantidade || 0), 0);
       return `
         <div class="item-venda card venda-accordion" style="margin-bottom:12px;">
@@ -1574,6 +1942,8 @@ async function carregarVendas(filtro = '') {
             <div style="margin-top:8px;">
               <b>Método de Pagamento:</b> ${v.metodo ?? '-'}<br>
               ${v.metodo === 'Cartão Crédito' ? `<b>Parcelas:</b> ${v.parcelas ? v.parcelas : '-'}<br>` : ''}
+              ${v.metodo === 'Fiado' && v.valor_pago !== null && v.valor_pago !== undefined ? `<b>Valor Pago no Momento:</b> R$ ${v.valor_pago.toFixed(2)}<br>` : ''}
+              ${v.metodo === 'Fiado' && v.observacoes_fiado ? `<b>Observações:</b> ${v.observacoes_fiado}<br>` : ''}
               <b>Data:</b> ${data} <span style="color:#888;font-size:0.95em;">${hora}</span><br>
               <b>Cliente:</b> ${v.cliente_nome || '-'}${v.cliente_cpf ? ' | CPF: ' + v.cliente_cpf : ''}${v.cliente_telefone ? ' | Tel: ' + v.cliente_telefone : ''}<br>
               <b>Vendedor:</b> ${v.vendedor_nome || '-'}
@@ -1662,6 +2032,12 @@ async function carregarAnaliseGeral(mesSelecionado) {
     vendas = filtrarPorMes(vendas, 'data', mesSelecionado);
   }
 
+  // Busca pagamentos e filtra se necessário
+  let pagamentos = await window.api.getPagamentos();
+  if (mesSelecionado) {
+    pagamentos = filtrarPorMes(pagamentos, 'data', mesSelecionado);
+  }
+
   // Garante que _mercadoriasCache está carregado
   if (!_mercadoriasCache.length) {
     _mercadoriasCache = await window.api.getMercadorias();
@@ -1672,7 +2048,17 @@ async function carregarAnaliseGeral(mesSelecionado) {
   const total_mercadorias = vendas.length;
   // Total de vendas únicas (por id_venda)
   const total_vendas = new Set(vendas.map(v => v.id_venda)).size;
-  const total_arrecadado = vendas.reduce((acc, v) => acc + (v.preco || 0), 0);
+  
+  // Soma vendas + pagamentos
+  const total_vendas_arrecadado = vendas.reduce((acc, v) => {
+    if (v.metodo === 'Fiado') {
+      return acc + (v.valor_pago !== null && v.valor_pago !== undefined ? v.valor_pago : 0);
+    }
+    return acc + (v.preco || 0);
+  }, 0);
+  const total_pagamentos = pagamentos.reduce((acc, p) => acc + (p.valor || 0), 0);
+  const total_arrecadado = total_vendas_arrecadado + total_pagamentos;
+  
   const ticket_medio = total_vendas ? total_arrecadado / total_vendas : 0;
 
   // Produto mais vendido
@@ -1747,7 +2133,7 @@ async function carregarAnaliseGeral(mesSelecionado) {
   }
 
   // Gráfico de métodos de pagamento (pizza)
-  const metodos = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX'];
+  const metodos = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX', 'Fiado'];
   const vendasAll = await window.api.getVendas();
   const counts = metodos.map(m => vendasAll.filter(v => v.metodo === m).length);
   const canvasPizza = document.getElementById('grafico-pizza');
