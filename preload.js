@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('api', {
   getAnaliseGeral: () => ipcRenderer.invoke('get-analise-geral'),
   salvarImagem: (imgData) => ipcRenderer.invoke('salvar-imagem', imgData),
   getClientes: () => ipcRenderer.invoke('get-clientes'),
+  editarCliente: (dados) => ipcRenderer.invoke('editar-cliente', dados),
+  deletarCliente: (id) => ipcRenderer.invoke('deletar-cliente', id),
   editarMercadoria: (dados) => ipcRenderer.invoke('editar-mercadoria', dados),
   editarVariante: (dados) => ipcRenderer.invoke('editar-variante', dados),
   atualizarEstoque: (dados) => ipcRenderer.invoke('atualizar-estoque', dados),

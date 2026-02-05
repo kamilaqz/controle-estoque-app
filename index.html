@@ -62,7 +62,7 @@
                 <form id="form-mercadoria">
                     <input type="text" id="codigo" placeholder="Código do Produto" required />
                     <input type="text" id="nome" placeholder="Nome do Produto" required />
-                    <input type="number" id="preco" placeholder="Preço (R$)" step="0.01" required />
+                    <input type="text" inputmode="decimal" id="preco" placeholder="Preço (R$)" required />
                     <input type="file" id="imagem" accept="image/*" style="margin-bottom:10px;" />
 
                     <div id="variantes-container">
@@ -166,7 +166,7 @@
                                 <label for="valor_pago" style="font-weight:bold; display:block; margin-bottom:4px;">
                                     Valor pago no momento da compra:
                                 </label>
-                                <input type="number" id="valor_pago" placeholder="R$ 0,00" step="0.01" min="0"
+                                <input type="text" inputmode="decimal" id="valor_pago" placeholder="R$ 0,00"
                                     style="width:150px;" />
                             </div>
 
@@ -265,7 +265,7 @@
                             </div>
 
                             <label for="pagamento-valor" style="font-weight: bold; display: block; margin-bottom: 4px;">Valor Recebido:</label>
-                            <input type="number" id="pagamento-valor" placeholder="R$ 0,00" step="0.01" min="0.01" required 
+                            <input type="text" inputmode="decimal" id="pagamento-valor" placeholder="R$ 0,00" required 
                                 style="width:100%; padding:8px; margin-bottom:12px; border-radius:6px; border:1px solid #b3d8f6;" />
 
                             <label for="pagamento-obs" style="font-weight: bold; display: block; margin-bottom: 4px;">Observações:</label>

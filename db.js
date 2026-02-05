@@ -34,8 +34,7 @@ db.serialize(() => {
     nome TEXT,
     cpf TEXT,
     telefone TEXT,
-    nascimento TEXT,
-    UNIQUE(nome, cpf, telefone, nascimento)
+    nascimento TEXT
 )`);
     db.run(`CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,8 +153,9 @@ module.exports = {
                     });
                 return;
             }
-            db.get(`SELECT id FROM clientes WHERE nome = ? AND cpf = ? AND telefone = ? AND nascimento = ?`,
-                [cliente_nome, cliente_cpf, cliente_telefone, cliente_nascimento], (err, row) => {
+            // Busca cliente existente por nome E (cpf OU telefone)
+            db.get(`SELECT id FROM clientes WHERE nome = ? AND (cpf = ? OR telefone = ?)`,
+                [cliente_nome, cliente_cpf || '', cliente_telefone || ''], (err, row) => {
                     if (err) return rej(err);
                     const insertVenda = (clienteId) => {
                         db.run(`INSERT INTO vendas (id_venda, codigo, cor, tamanho, data, metodo, preco, quantidade, parcelas, cliente_id, vendedor_nome, observacoes_fiado, valor_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -475,6 +475,36 @@ module.exports = {
                 });
         });
     },
+    editarCliente({ id, nome, cpf, telefone, nascimento }) {
+        return new Promise((res, rej) => {
+            db.run(`
+                UPDATE clientes 
+                SET nome = ?, cpf = ?, telefone = ?, nascimento = ?
+                WHERE id = ?
+            `, [nome, cpf, telefone, nascimento, id], (err) => {
+                if (err) rej(err); else res();
+            });
+        });
+    },
+    deletarCliente(id) {
+        return new Promise((res, rej) => {
+            // Check if client has sales or payments
+            db.get(`
+                SELECT 
+                    (SELECT COUNT(*) FROM vendas WHERE cliente_id = ?) as vendas_count,
+                    (SELECT COUNT(*) FROM pagamentos WHERE cliente_id = ?) as pagamentos_count
+            `, [id, id], (err, row) => {
+                if (err) return rej(err);
+                if ((row.vendas_count > 0) || (row.pagamentos_count > 0)) {
+                    return rej(new Error('Não é possível excluir cliente com histórico financeiro (vendas ou pagamentos).'));
+                }
+                
+                db.run(`DELETE FROM clientes WHERE id = ?`, [id], (err) => {
+                    if (err) rej(err); else res();
+                });
+            });
+        });
+    },
     getPagamentos() {
         return new Promise((res, rej) => {
             db.all(`
@@ -496,24 +526,34 @@ module.exports = {
     },
     getClientesComDivida() {
         return new Promise((res, rej) => {
-            db.all(`
+            const query = `
+                WITH VendasFiado AS (
+                    SELECT cliente_id, SUM(preco - COALESCE(valor_pago, 0)) as total_divida
+                    FROM vendas
+                    WHERE metodo = 'Fiado' AND cliente_id IS NOT NULL
+                    GROUP BY cliente_id
+                ),
+                PagamentosTotal AS (
+                    SELECT cliente_id, SUM(valor) as total_pago
+                    FROM pagamentos
+                    WHERE cliente_id IS NOT NULL
+                    GROUP BY cliente_id
+                )
                 SELECT 
                     c.id,
                     c.nome,
                     c.telefone,
                     c.cpf,
-                    COALESCE(SUM(CASE 
-                        WHEN v.metodo = 'Fiado' THEN v.preco - COALESCE(v.valor_pago, 0)
-                        ELSE 0 
-                    END), 0) as total_divida,
-                    COALESCE(SUM(p.valor), 0) as total_pago
+                    COALESCE(v.total_divida, 0) as total_divida,
+                    COALESCE(p.total_pago, 0) as total_pago
                 FROM clientes c
-                LEFT JOIN vendas v ON c.id = v.cliente_id
-                LEFT JOIN pagamentos p ON c.id = p.cliente_id
-                GROUP BY c.id, c.nome, c.telefone, c.cpf
-                HAVING (total_divida - total_pago) > 0
-                ORDER BY (total_divida - total_pago) DESC
-            `, [], (err, rows) => {
+                LEFT JOIN VendasFiado v ON c.id = v.cliente_id
+                LEFT JOIN PagamentosTotal p ON c.id = p.cliente_id
+                WHERE (COALESCE(v.total_divida, 0) - COALESCE(p.total_pago, 0)) > 0.01
+                ORDER BY (COALESCE(v.total_divida, 0) - COALESCE(p.total_pago, 0)) DESC
+            `;
+            
+            db.all(query, [], (err, rows) => {
                 if (err) rej(err); 
                 else {
                     // Calcula o saldo devedor (dívida - pagamentos)
@@ -530,24 +570,19 @@ module.exports = {
         return new Promise((res, rej) => {
             db.get(`
                 SELECT 
-                    COALESCE(SUM(CASE 
-                        WHEN v.metodo = 'Fiado' THEN v.preco - COALESCE(v.valor_pago, 0)
-                        ELSE 0 
-                    END), 0) as total_divida,
-                    COALESCE(SUM(p.valor), 0) as total_pago
-                FROM clientes c
-                LEFT JOIN vendas v ON c.id = v.cliente_id
-                LEFT JOIN pagamentos p ON c.id = p.cliente_id
-                WHERE c.id = ?
-                GROUP BY c.id
-            `, [cliente_id], (err, row) => {
+                    (SELECT COALESCE(SUM(preco - COALESCE(valor_pago, 0)), 0) FROM vendas WHERE cliente_id = ? AND metodo = 'Fiado') as total_divida,
+                    (SELECT COALESCE(SUM(valor), 0) FROM pagamentos WHERE cliente_id = ?) as total_pago
+            `, [cliente_id, cliente_id], (err, row) => {
                 if (err) rej(err);
-                else if (!row) res({ total_divida: 0, total_pago: 0, saldo_devedor: 0 });
-                else res({
-                    total_divida: row.total_divida,
-                    total_pago: row.total_pago,
-                    saldo_devedor: row.total_divida - row.total_pago
-                });
+                else {
+                    const total_divida = row ? row.total_divida : 0;
+                    const total_pago = row ? row.total_pago : 0;
+                    res({
+                        total_divida,
+                        total_pago,
+                        saldo_devedor: total_divida - total_pago
+                    });
+                }
             });
         });
     },

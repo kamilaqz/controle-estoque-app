@@ -107,6 +107,7 @@
 .dialog-box input[type="text"],
 .dialog-box input[type="number"],
 .dialog-box input[type="file"],
+.dialog-box input[type="date"],
 .dialog-box select,
 #estoque-cor, #estoque-tamanho {
   width: 100%;

@@ -46,6 +46,8 @@ ipcMain.handle('registrar-venda', (e, venda) => db.addVenda(venda));
 ipcMain.handle('get-vendas', () => db.getVendas());
 ipcMain.handle('get-estatisticas', () => db.getEstatisticas());
 ipcMain.handle('get-clientes', () => db.getClientes());
+ipcMain.handle('editar-cliente', (e, dados) => db.editarCliente(dados));
+ipcMain.handle('deletar-cliente', (e, id) => db.deletarCliente(id));
 ipcMain.handle('get-analise-geral', () => db.getAnaliseGeral());
 
 ipcMain.handle('salvar-imagem', async (e, { codigo, dataUrl }) => {

@@ -1,5 +1,67 @@
 // ...existing code...
 
+// Helper functions for Currency (BR Locale)
+function formatCurrency(value) {
+    if (value === null || value === undefined) return '0,00';
+    return Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseCurrency(value) {
+    if (!value) return 0;
+    if (typeof value === 'number') return value;
+    // Replace comma with dot and remove other non-numeric chars (except dot and minus)
+    if (value.includes(',')) {
+        return parseFloat(value.replace(/\./g, '').replace(',', '.'));
+    }
+    return parseFloat(value);
+}
+
+function setupMoneyInput(selector) {
+    // Finds elements by ID or Class
+    const inputs = document.querySelectorAll(selector);
+    inputs.forEach(input => {
+        // Ensure properties for masking
+        if (input.type === 'number' || input.type === 'text') {
+            input.type = 'text';
+            input.inputMode = 'numeric'; // Numeric keyboard on mobile
+            input.placeholder = '0,00';
+        }
+
+        const applyMask = (el) => {
+            // Remove everything that isn't a digit
+            let value = el.value.replace(/\D/g, '');
+            
+            // If empty, treat as 0
+            if (value === '') value = '0';
+            
+            // Convert to integer then divide by 100 to get decimals
+            const floatVal = parseInt(value, 10) / 100;
+            
+            // Format back to string (e.g. 1234.56 -> "1.234,56")
+            el.value = floatVal.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        };
+        
+        // Initial formatting of existing value
+        if (input.value) {
+            applyMask(input);
+        }
+
+        // Apply formatting on every input
+        input.addEventListener('input', function(e) {
+            applyMask(this);
+        });
+
+        // Select all text on focus for easier overwriting
+        input.addEventListener('focus', function() {
+            this.select();
+        });
+    });
+}
+
+
 // Adiciona botão de apagar venda no histórico
 function renderVendasAgrupadas(grupos) {
   const lista = document.getElementById('lista-vendas');
@@ -7,13 +69,14 @@ function renderVendasAgrupadas(grupos) {
   lista.innerHTML = grupos.map((grupo, idx) => {
     const v = grupo[0];
     const { data, hora } = formatarDataHora(v.data);
+    // Calcula o total da compra (sempre o valor total, não o valor pago)
     const total = grupo.reduce((acc, item) => acc + (item.preco || 0), 0);
     const totalQtd = grupo.reduce((acc, item) => acc + (item.quantidade || 0), 0);
     return `
       <div class="item-venda card venda-accordion" style="margin-bottom:12px;">
         <div class="venda-header" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:1em;" data-idx="${idx}">
           <div>
-            <strong>${data}</strong> <span style="color:#888;font-size:0.95em;">${hora}</span> | R$ ${total.toFixed(2)} | ${v.metodo || '-'}
+            <strong>${data}</strong> <span style="color:#888;font-size:0.95em;">${hora}</span> | R$ ${formatCurrency(total)} | ${v.metodo || '-'}
             ${v.cliente_nome ? `| Cliente: <span style='color:#1976d2'>${v.cliente_nome}</span>` : ''}
             | <b>Qtd:</b> ${totalQtd}
           </div>
@@ -23,13 +86,19 @@ function renderVendasAgrupadas(grupos) {
         <div class="venda-detalhes" style="display:none;padding:10px 0 0 0;">
           <b>Itens da venda:</b>
           <ul style="margin:8px 0 0 0; padding-left:18px;">
-            ${grupo.map(item => `
-              <li>
-                <b>${item.codigo}</b> - Qtd: ${item.quantidade} - R$ ${item.preco?.toFixed(2) ?? '-'}
-                ${item.cor ? `| Cor: ${item.cor}` : ''}
-                ${item.tamanho ? `| Tam: ${item.tamanho === 'T.U.' ? 'Tamanho Único' : item.tamanho}` : ''}
-              </li>
-            `).join('')}
+            ${grupo.map(item => {
+              const valorItem = (item.metodo === 'Fiado' && item.valor_pago !== null && item.valor_pago !== undefined) 
+                ? item.valor_pago 
+                : (item.preco || 0);
+              return `
+                <li>
+                  <b>${item.codigo}</b> - Qtd: ${item.quantidade} - R$ ${formatCurrency(valorItem)}
+                  ${item.cor ? `| Cor: ${item.cor}` : ''}
+                  ${item.tamanho ? `| Tam: ${item.tamanho === 'T.U.' ? 'Tamanho Único' : item.tamanho}` : ''}
+                  ${item.metodo === 'Fiado' && item.valor_pago !== null ? ` (Pago: R$ ${formatCurrency(item.valor_pago)} / Total: R$ ${formatCurrency(item.preco)})` : ''}
+                </li>
+              `;
+            }).join('')}
           </ul>
           <div style="margin-top:8px;">
             <b>Método de Pagamento:</b> ${v.metodo ?? '-'}<br>
@@ -61,14 +130,14 @@ function renderVendasAgrupadas(grupos) {
     });
     // Evento para apagar venda
     document.querySelectorAll('.btn-apagar-venda').forEach(btn => {
-      btn.onclick = async function (e) {
+      btn.onclick = function (e) {
         e.stopPropagation();
-        if (confirm('Tem certeza que deseja apagar esta venda?')) {
+        abrirDialogConfirm('Tem certeza que deseja apagar esta venda?', async () => {
           const id_venda = btn.getAttribute('data-id-venda');
           await window.api.deletarVenda(id_venda);
           carregarVendas();
           mostrarToast('Venda apagada com sucesso!');
-        }
+        });
       };
     });
   }, 0);
@@ -112,6 +181,156 @@ document.getElementById('imagem-mensagem')?.addEventListener('change', function(
     reader.readAsDataURL(file);
   }
 });
+// Custom Dialogs for Alert and Confirm
+function abrirDialogAlert(mensagem) {
+  const html = `
+    <div id="dialog-alert" class="dialog-overlay">
+      <div class="dialog-box" style="max-width:400px; text-align:center;">
+        <h3 style="color:#1976d2; margin-top:0;">Aviso</h3>
+        <p style="margin:16px 0; font-size:1.1em; color:#333;">${mensagem}</p>
+        <button id="btn-alert-ok" class="btn primario" style="width:100px;">OK</button>
+      </div>
+    </div>
+  `;
+  fecharDialogs();
+  document.body.insertAdjacentHTML('beforeend', html);
+  
+  // Close on overlay click
+  const overlay = document.getElementById('dialog-alert');
+  overlay.onclick = (e) => {
+    if (e.target === overlay) fecharDialogs();
+  };
+  
+  const btn = document.getElementById('btn-alert-ok');
+  btn.onclick = fecharDialogs;
+  btn.focus();
+}
+
+function abrirDialogConfirm(mensagem, onConfirm) {
+  const html = `
+    <div id="dialog-confirm" class="dialog-overlay">
+      <div class="dialog-box" style="max-width:400px; text-align:center;">
+        <h3 style="color:#d32f2f; margin-top:0;">Confirmação</h3>
+        <p style="margin:16px 0; font-size:1.1em; color:#333;">${mensagem}</p>
+        <div class="dialog-actions" style="justify-content:center; gap:12px;">
+          <button id="btn-confirm-yes" class="btn" style="background:#d32f2f; color:white; min-width:80px;">Sim</button>
+          <button id="btn-confirm-no" class="btn secondary" style="min-width:80px;">Não</button>
+        </div>
+      </div>
+    </div>
+  `;
+  fecharDialogs();
+  document.body.insertAdjacentHTML('beforeend', html);
+  
+  // Close on overlay click
+  const overlay = document.getElementById('dialog-confirm');
+  overlay.onclick = (e) => {
+    if (e.target === overlay) fecharDialogs();
+  };
+  
+  document.getElementById('btn-confirm-no').onclick = fecharDialogs;
+  document.getElementById('btn-confirm-yes').onclick = async () => {
+    fecharDialogs();
+    if (onConfirm) await onConfirm();
+  };
+  document.getElementById('btn-confirm-no').focus();
+}
+
+function abrirDialogEditarCliente(cliente) {
+  const html = `
+    <div id="dialog-editar-cliente" class="dialog-overlay">
+      <div class="dialog-box">
+        <h3>Editar Cliente</h3>
+        <label>Nome:<br><input id="edit-cli-nome" type="text" value="${cliente.nome || ''}" /></label><br>
+        <label>CPF:<br><input id="edit-cli-cpf" type="text" value="${cliente.cpf || ''}" /></label><br>
+        <label>Telefone:<br><input id="edit-cli-telefone" type="text" value="${cliente.telefone || ''}" /></label><br>
+        <label>Nascimento:<br><input id="edit-cli-nascimento" type="date" value="${cliente.nascimento || ''}" /></label><br>
+        <div class="dialog-actions">
+          <button id="btn-salvar-cli">Salvar</button>
+          <button id="btn-cancelar-cli" class="btn-cancelar-edit">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  fecharDialogs();
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  // Apply CPF mask
+  const cpfInput = document.getElementById('edit-cli-cpf');
+  if (cpfInput) {
+    // Format existing value
+    let cpfValue = cpfInput.value.replace(/\D/g, '').slice(0, 11);
+    cpfValue = cpfValue.replace(/(\d{3})(\d)/, '$1.$2');
+    cpfValue = cpfValue.replace(/(\d{3})(\d)/, '$1.$2');
+    cpfValue = cpfValue.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    cpfInput.value = cpfValue;
+    
+    // Apply mask on input
+    cpfInput.addEventListener('input', (e) => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+      v = v.replace(/(\d{3})(\d)/, '$1.$2');
+      v = v.replace(/(\d{3})(\d)/, '$1.$2');
+      v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+      e.target.value = v;
+    });
+  }
+
+  // Apply phone mask
+  const phoneInput = document.getElementById('edit-cli-telefone');
+  if (phoneInput) {
+    // Format existing value
+    let phoneValue = phoneInput.value.replace(/\D/g, '').slice(0, 11);
+    phoneValue = phoneValue.replace(/(\d{2})(\d)/, '($1) $2');
+    phoneValue = phoneValue.replace(/(\d{5})(\d)/, '$1-$2');
+    phoneInput.value = phoneValue;
+    
+    // Apply mask on input
+    phoneInput.addEventListener('input', (e) => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+      v = v.replace(/(\d{2})(\d)/, '($1) $2');
+      v = v.replace(/(\d{5})(\d)/, '$1-$2');
+      e.target.value = v;
+    });
+  }
+
+  // Close on overlay click (but not on dialog box clicks)
+  const overlay = document.getElementById('dialog-editar-cliente');
+  const dialogBox = overlay.querySelector('.dialog-box');
+  
+  overlay.onclick = (e) => {
+    if (e.target === overlay) fecharDialogs();
+  };
+  
+  // Stop propagation from dialog box to prevent closing
+  dialogBox.onclick = (e) => {
+    e.stopPropagation();
+  };
+
+  document.getElementById('btn-cancelar-cli').onclick = (e) => {
+    e.stopPropagation();
+    fecharDialogs();
+  };
+  
+  document.getElementById('btn-salvar-cli').onclick = async function (e) {
+    e.stopPropagation();
+    const nome = document.getElementById('edit-cli-nome').value.trim();
+    const cpf = document.getElementById('edit-cli-cpf').value.trim();
+    const telefone = document.getElementById('edit-cli-telefone').value.trim();
+    const nascimento = document.getElementById('edit-cli-nascimento').value;
+
+    if (!nome) return abrirDialogAlert('Nome é obrigatório.');
+
+    try {
+      await window.api.editarCliente({ id: cliente.id, nome, cpf, telefone, nascimento });
+      mostrarToast('Cliente atualizado com sucesso!');
+      fecharDialogs();
+      carregarClientes();
+    } catch (e) {
+      abrirDialogAlert('Erro ao atualizar cliente: ' + e.message);
+    }
+  };
+}
+
 // Exibe lista de clientes na aba "Clientes"
 async function carregarClientes() {
   const container = document.getElementById('lista-clientes');
@@ -141,6 +360,7 @@ async function carregarClientes() {
           <th style="padding:12px 8px;border-bottom:2px solid #b3d8f6;text-align:left;color:#1976d2;font-size:1em;">Nome</th>
           <th style="padding:12px 8px;border-bottom:2px solid #b3d8f6;text-align:left;color:#1976d2;font-size:1em;">Telefone</th>
           <th style="padding:12px 8px;border-bottom:2px solid #b3d8f6;text-align:left;color:#1976d2;font-size:1em;">Data de Nascimento</th>
+          <th style="padding:12px 8px;border-bottom:2px solid #b3d8f6;text-align:right;color:#1976d2;font-size:1em;">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -148,10 +368,46 @@ async function carregarClientes() {
           <td style="padding:10px 8px;border-bottom:1px solid #eee;">${c.nome || '-'}</td>
           <td style="padding:10px 8px;border-bottom:1px solid #eee;">${c.telefone || '-'}</td>
           <td style="padding:10px 8px;border-bottom:1px solid #eee;">${formatarData(c.nascimento)}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #eee; text-align:right;">
+             <button class="btn-editar-cliente" data-id="${c.id}" style="background:none; border:none; cursor:pointer;" title="Editar">✏️</button>
+             <button class="btn-deletar-cliente" data-id="${c.id}" style="background:none; border:none; cursor:pointer; margin-left:8px;" title="Excluir">🗑️</button>
+          </td>
         </tr>`).join('')}
       </tbody>
     </table>`;
     container.innerHTML = html;
+
+    // Bind Actions
+    container.querySelectorAll('.btn-editar-cliente').forEach(btn => {
+      btn.onclick = () => {
+        const id = parseInt(btn.getAttribute('data-id'));
+        const cliente = clientes.find(c => c.id === id);
+        if (cliente) abrirDialogEditarCliente(cliente);
+      };
+    });
+
+    container.querySelectorAll('.btn-deletar-cliente').forEach(btn => {
+      btn.onclick = () => {
+        const id = parseInt(btn.getAttribute('data-id'));
+        const cliente = clientes.find(c => c.id === id);
+        if (cliente) {
+             abrirDialogConfirm(`Tem certeza que deseja excluir o cliente <b>${cliente.nome}</b>?`, async () => {
+                try {
+                    await window.api.deletarCliente(id);
+                    mostrarToast('Cliente excluído com sucesso!');
+                    carregarClientes();
+                } catch (e) {
+                    // Check if error is about financial history
+                    if (e.message.includes('histórico financeiro') || e.message.includes('vendas ou pagamentos')) {
+                        abrirDialogAlert(`<b>Não é possível excluir este cliente</b><br><br>O cliente <b>${cliente.nome}</b> possui histórico de vendas ou pagamentos registrados no sistema.<br><br>Por questões de integridade financeira, clientes com histórico não podem ser removidos.`);
+                    } else {
+                        abrirDialogAlert('Erro ao excluir: ' + e.message);
+                    }
+                }
+             });
+        }
+      };
+    });
   }
   // Filtro
   const buscaInput = document.getElementById('busca-clientes');
@@ -232,7 +488,7 @@ async function carregarClientesComDivida(filtro = '') {
         </div>
         <div style="text-align: right;">
           <div style="font-size: 0.85em; color: #666;">Dívida Total:</div>
-          <div style="font-size: 1.3em; font-weight: bold; color: #d32f2f;">R$ ${c.saldo_devedor.toFixed(2)}</div>
+          <div style="font-size: 1.3em; font-weight: bold; color: #d32f2f;">R$ ${formatCurrency(c.saldo_devedor)}</div>
         </div>
       </div>
     </div>
@@ -292,7 +548,7 @@ async function carregarHistoricoPagamentos(filtro = '') {
             ${p.observacoes ? `<div style="color:#888; font-size:0.85em; margin-top:4px; font-style:italic;">${p.observacoes}</div>` : ''}
           </div>
           <div style="text-align: right; margin-left: 16px;">
-            <div style="font-size: 1.2em; font-weight: bold; color: #4caf50;">R$ ${p.valor.toFixed(2)}</div>
+            <div style="font-size: 1.2em; font-weight: bold; color: #4caf50;">R$ ${formatCurrency(p.valor)}</div>
             <button class="btn-apagar-pagamento" data-id="${p.id}" 
               style="background:#ffebee; border:1px solid #ef5350; color:#c00; padding:4px 12px; border-radius:4px; font-size:0.8em; cursor:pointer; margin-top:6px;">
               Excluir
@@ -305,19 +561,23 @@ async function carregarHistoricoPagamentos(filtro = '') {
 
   // Adicionar eventos de exclusão
   document.querySelectorAll('.btn-apagar-pagamento').forEach(btn => {
-    btn.onclick = async function() {
+    btn.onclick = function() {
       const id = parseInt(btn.getAttribute('data-id'));
-      if (confirm('Tem certeza que deseja excluir este pagamento?')) {
+      abrirDialogConfirm('Tem certeza que deseja excluir este pagamento?', async () => {
         await window.api.deletarPagamento(id);
         mostrarToast('Pagamento excluído com sucesso!');
         carregarPagamentos();
-      }
+      });
     };
   });
 }
 
 // Event listeners para a aba de pagamentos
 document.addEventListener('DOMContentLoaded', () => {
+  setupMoneyInput('#preco');
+  setupMoneyInput('#pagamento-valor');
+  setupMoneyInput('#valor_pago');
+
   const formPagamento = document.getElementById('form-pagamento');
   const selectCliente = document.getElementById('pagamento-cliente');
   const buscaDevedores = document.getElementById('busca-devedores');
@@ -328,11 +588,11 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       
       const cliente_id = parseInt(document.getElementById('pagamento-cliente').value);
-      const valor = parseFloat(document.getElementById('pagamento-valor').value);
+      const valor = parseCurrency(document.getElementById('pagamento-valor').value);
       const observacoes = document.getElementById('pagamento-obs').value;
       
       if (!cliente_id) {
-        alert('Selecione um cliente!');
+        abrirDialogAlert('Selecione um cliente!');
         return;
       }
 
@@ -363,7 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const divida = await window.api.getDividaCliente(cliente_id);
       if (divida.saldo_devedor > 0) {
-        valorSpan.textContent = `R$ ${divida.saldo_devedor.toFixed(2)}`;
+        valorSpan.textContent = `R$ ${formatCurrency(divida.saldo_devedor)}`;
         infoDiv.style.display = 'block';
       } else {
         infoDiv.style.display = 'none';
@@ -804,7 +1064,7 @@ window.atualizarGraficosComFiltro = async function atualizarGraficosComFiltro() 
             beginAtZero: true,
             ticks: {
               callback: function(value) {
-                return 'R$ ' + value.toFixed(2);
+                return 'R$ ' + formatCurrency(value);
               }
             }
           }
@@ -887,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnExportar?.addEventListener('click', async () => {
     const result = await window.api.exportarMercadorias();
     if (result?.error) {
-      alert('Erro ao exportar: ' + result.error);
+      abrirDialogAlert('Erro ao exportar: ' + result.error);
       return;
     }
     if (!result?.canceled) mostrarToast('Exportado para ' + (result.filePath || 'arquivo'));
@@ -896,7 +1156,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnImportar?.addEventListener('click', async () => {
     const result = await window.api.importarMercadorias();
     if (result?.error) {
-      alert('Erro ao importar: ' + result.error);
+      abrirDialogAlert('Erro ao importar: ' + result.error);
       return;
     }
     if (!result?.canceled) {
@@ -1106,13 +1366,13 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const codigo = document.getElementById('codigo').value;
     const nome = document.getElementById('nome').value;
-    const preco = parseFloat(document.getElementById('preco').value);
+    const preco = parseCurrency(document.getElementById('preco').value);
     const imagemInput = document.getElementById('imagem');
 
     // Verifica se já existe produto com o mesmo código
     const mercadoriasExistentes = await window.api.getMercadorias();
     if (mercadoriasExistentes.some(m => m.codigo === codigo)) {
-      alert('Já existe uma mercadoria cadastrada com este código. Edite a mercadoria existente ou delete para cadastrar novamente.');
+      abrirDialogAlert('Já existe uma mercadoria cadastrada com este código. Edite a mercadoria existente ou delete para cadastrar novamente.');
       return;
     }
 
@@ -1135,7 +1395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (variantes.length === 0) {
-      alert('Preencha pelo menos uma variante com quantidade maior que zero!');
+      abrirDialogAlert('Preencha pelo menos uma variante com quantidade maior que zero!');
       return;
     }
 
@@ -1176,7 +1436,7 @@ document.addEventListener('DOMContentLoaded', () => {
       observacoes_fiado = document.getElementById('observacoes_fiado')?.value || '';
       const pagoParcial = document.querySelector('input[name="fiado_pago_parcial"]:checked')?.value;
       if (pagoParcial === 'sim') {
-        valor_pago = parseFloat(document.getElementById('valor_pago').value) || 0;
+        valor_pago = parseCurrency(document.getElementById('valor_pago').value) || 0;
       }
     }
     // Dados do cliente
@@ -1195,18 +1455,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const quantidade = parseInt(item.querySelector('.quantidade-produto').value);
       const produto = mercadorias.find(p => p.codigo === codigo);
       if (!produto) {
-        alert(`Produto com código ${codigo} não encontrado.`);
+        abrirDialogAlert(`Produto com código ${codigo} não encontrado.`);
         erroEstoque = true;
         continue;
       }
       const variante = (produto.variantes || []).find(v => v.cor === cor && v.tamanho === tamanho);
       if (!variante) {
-        alert(`Variante não encontrada para ${codigo} (${cor} ${tamanho})`);
+        abrirDialogAlert(`Variante não encontrada para ${codigo} (${cor} ${tamanho})`);
         erroEstoque = true;
         continue;
       }
       if (quantidade > variante.quantidade) {
-        alert(`Estoque insuficiente para ${produto.nome} - ${cor} ${tamanho} (em estoque: ${variante.quantidade}, solicitado: ${quantidade})`);
+        abrirDialogAlert(`Estoque insuficiente para ${produto.nome} - ${cor} ${tamanho} (em estoque: ${variante.quantidade}, solicitado: ${quantidade})`);
         erroEstoque = true;
         continue;
       }
@@ -1579,7 +1839,7 @@ async function carregarMercadorias(filtro = '') {
         <div>
           <div class="mercadoria-header"><strong>${d.nome}</strong></div>
           <div class="mercadoria-info">Código: ${d.codigo}</div>
-          <div class="mercadoria-info">Preço: R$ ${d.preco.toFixed(2)}</div>
+          <div class="mercadoria-info">Preço: R$ ${formatCurrency(d.preco)}</div>
           <div class="mercadoria-info">Estoque total: <b>${estoqueTotal}</b></div>
           <div class="mercadoria-info">
             <ul style="margin:2px 0 0 0;padding-left:18px;">
@@ -1614,7 +1874,7 @@ async function carregarMercadorias(filtro = '') {
       const codigo = btn.getAttribute('data-codigo');
       const mercadorias = await window.api.getMercadorias();
       const item = mercadorias.find(m => m.codigo == codigo);
-      if (!item) return alert('Mercadoria não encontrada!');
+      if (!item) return abrirDialogAlert('Mercadoria não encontrada!');
       abrirDialogEditar(item);
     });
   });
@@ -1624,7 +1884,7 @@ async function carregarMercadorias(filtro = '') {
       const codigo = btn.getAttribute('data-codigo');
       const mercadorias = await window.api.getMercadorias();
       const item = mercadorias.find(m => m.codigo == codigo);
-      if (!item) return alert('Mercadoria não encontrada!');
+      if (!item) return abrirDialogAlert('Mercadoria não encontrada!');
       abrirDialogEstoque(item);
     });
   });
@@ -1634,7 +1894,7 @@ async function carregarMercadorias(filtro = '') {
       const codigo = btn.getAttribute('data-codigo');
       const mercadorias = await window.api.getMercadorias();
       const item = mercadorias.find(m => m.codigo == codigo);
-      if (!item) return alert('Mercadoria não encontrada!');
+      if (!item) return abrirDialogAlert('Mercadoria não encontrada!');
       abrirDialogEditarVariantes(item);
     });
   });
@@ -1665,7 +1925,7 @@ function abrirDialogEditar(item) {
       <div class="dialog-box">
         <h3>Editar Mercadoria</h3>
         <label>Nome:<br><input id="edit-nome" type="text" value="${item.nome}" /></label><br>
-        <label>Preço:<br><input id="edit-preco" type="number" min="0" step="0.01" value="${item.preco}" /></label><br>
+        <label>Preço:<br><input id="edit-preco" type="text" inputmode="numeric" value="${item.preco.toFixed(2).replace('.', ',')}" /></label><br>
         <label>Imagem:<br><input id="edit-imagem" type="file" accept="image/*" /></label><br>
         <img src="${item.imagem || ''}" id="edit-preview" style="display:${item.imagem ? 'block' : 'none'};margin:8px 0;" />
         <div class="dialog-actions">
@@ -1677,6 +1937,8 @@ function abrirDialogEditar(item) {
   `;
   fecharDialogs();
   document.body.insertAdjacentHTML('beforeend', html);
+  // Important: initialize mask on empty or filled/formatted values from setupMoneyInput
+  setupMoneyInput('#edit-preco');
   document.getElementById('btn-cancelar-edit').onclick = fecharDialogs;
   document.getElementById('edit-imagem').onchange = function (e) {
     const file = e.target.files[0];
@@ -1691,7 +1953,7 @@ function abrirDialogEditar(item) {
   };
   document.getElementById('btn-salvar-edit').onclick = async function () {
     const nome = document.getElementById('edit-nome').value.trim();
-    const preco = parseFloat(document.getElementById('edit-preco').value);
+    const preco = parseCurrency(document.getElementById('edit-preco').value);
     let imagem = item.imagem;
     const file = document.getElementById('edit-imagem').files[0];
     if (file) {
@@ -1922,7 +2184,7 @@ async function carregarVendas(filtro = '') {
         <div class="item-venda card venda-accordion" style="margin-bottom:12px;">
           <div class="venda-header" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:1em;" data-idx="${idx}">
             <div>
-              <strong>${data}</strong> <span style="color:#888;font-size:0.95em;">${hora}</span> | R$ ${total.toFixed(2)} | ${v.metodo || '-'}
+              <strong>${data}</strong> <span style="color:#888;font-size:0.95em;">${hora}</span> | R$ ${formatCurrency(total)} | ${v.metodo || '-'}
               ${v.cliente_nome ? `| Cliente: <span style='color:#1976d2'>${v.cliente_nome}</span>` : ''}
               | <b>Qtd:</b> ${totalQtd}
             </div>
@@ -1933,7 +2195,7 @@ async function carregarVendas(filtro = '') {
             <ul style="margin:8px 0 0 0; padding-left:18px;">
               ${grupo.map(item => `
                 <li>
-                  <b>${item.codigo}</b> - Qtd: ${item.quantidade} - R$ ${item.preco?.toFixed(2) ?? '-'}
+                  <b>${item.codigo}</b> - Qtd: ${item.quantidade} - R$ ${item.preco !== undefined ? formatCurrency(item.preco) : '-'}
                   ${item.cor ? `| Cor: ${item.cor}` : ''}
                   ${item.tamanho ? `| Tam: ${item.tamanho === 'T.U.' ? 'Tamanho Único' : item.tamanho}` : ''}
                 </li>
@@ -1942,7 +2204,7 @@ async function carregarVendas(filtro = '') {
             <div style="margin-top:8px;">
               <b>Método de Pagamento:</b> ${v.metodo ?? '-'}<br>
               ${v.metodo === 'Cartão Crédito' ? `<b>Parcelas:</b> ${v.parcelas ? v.parcelas : '-'}<br>` : ''}
-              ${v.metodo === 'Fiado' && v.valor_pago !== null && v.valor_pago !== undefined ? `<b>Valor Pago no Momento:</b> R$ ${v.valor_pago.toFixed(2)}<br>` : ''}
+              ${v.metodo === 'Fiado' && v.valor_pago !== null && v.valor_pago !== undefined ? `<b>Valor Pago no Momento:</b> R$ ${formatCurrency(v.valor_pago)}<br>` : ''}
               ${v.metodo === 'Fiado' && v.observacoes_fiado ? `<b>Observações:</b> ${v.observacoes_fiado}<br>` : ''}
               <b>Data:</b> ${data} <span style="color:#888;font-size:0.95em;">${hora}</span><br>
               <b>Cliente:</b> ${v.cliente_nome || '-'}${v.cliente_cpf ? ' | CPF: ' + v.cliente_cpf : ''}${v.cliente_telefone ? ' | Tel: ' + v.cliente_telefone : ''}<br>
@@ -2088,8 +2350,8 @@ async function carregarAnaliseGeral(mesSelecionado) {
     <div class="dashboard-grid">
       <div class="card">📦 Total de mercadorias vendidas: <strong>${total_mercadorias}</strong></div>
       <div class="card">💳 Total de vendas: <strong>${total_vendas}</strong></div>
-      <div class="card">💰 Total Arrecadado: <strong>R$ ${total_arrecadado.toFixed(2)}</strong></div>
-      <div class="card">🧾 Ticket Médio: <strong>R$ ${ticket_medio.toFixed(2)}</strong></div>
+      <div class="card">💰 Total Arrecadado: <strong>R$ ${formatCurrency(total_arrecadado)}</strong></div>
+      <div class="card">🧾 Ticket Médio: <strong>R$ ${formatCurrency(ticket_medio)}</strong></div>
       <div class="card">🏆 Produto Mais Vendido: <strong>${produto_mais_vendido}</strong></div>
       <div class="card">💳 Método Mais Usado: <strong>${metodo_mais_usado}</strong></div>
     </div>
